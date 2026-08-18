@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 from manual_controller import (
     AttackAction, DiscoverChoiceAction, EndTurnAction, HeroPowerAction,
-    PlayCardAction, Target, UseLocationAction,
+    LaunchStarshipAction, PlayCardAction, Target, TradeCardAction,
+    UseLocationAction,
 )
 from src.recommendation_models import ActionKind
 
@@ -56,11 +57,10 @@ def adapt_action(proposed, state):
         raise RecommendationStateError("turn_changed")
     if proposed.action == ActionKind.PLAY_CARD:
         return _adapt_play_card(proposed, state)
+    if proposed.action == ActionKind.TRADE_CARD:
+        return _adapt_trade_card(proposed, state)
     if proposed.action == ActionKind.USE_HERO_POWER:
-        power = getattr(state, "my_hero_power", None)
-        return AdaptedAction(HeroPowerAction(),
-                             getattr(power, "entity_id", None), None,
-                             "hero_power_changed")
+        return _adapt_hero_power(proposed, state)
     if proposed.action == ActionKind.ATTACK:
         return _adapt_attack(proposed, state)
     if proposed.action == ActionKind.USE_LOCATION:
@@ -140,6 +140,49 @@ def _adapt_play_card(proposed, state):
                          "hand_card_left")
 
 
+def _adapt_trade_card(proposed, state):
+    index = proposed.source.index - 1
+    if not 0 <= index < len(state.my_hand_cards):
+        raise RecommendationStateError("hand_slot_out_of_range")
+    card = state.my_hand_cards[index]
+    entity_id = getattr(card, "entity_id", None)
+    manual = TradeCardAction(
+        index, card.card_id, card.cardtype, hand_entity_id=entity_id)
+    return AdaptedAction(
+        manual, entity_id, None, "hand_card_left")
+
+
+def _adapt_hero_power(proposed, state):
+    power = getattr(state, "my_hero_power", None)
+    target = None
+    target_id = None
+    if proposed.target is not None:
+        side = proposed.target.owner
+        if side not in {"friendly", "enemy"}:
+            raise RecommendationStateError("hero_power_target_unsupported")
+        if proposed.target.kind == "hero":
+            hero = (getattr(state, "my_hero", None)
+                    if side == "friendly"
+                    else getattr(state, "oppo_hero", None))
+            if hero is None:
+                raise RecommendationStateError("hero_power_target_missing")
+            target_id = getattr(hero, "entity_id", None)
+            target = Target(side, "hero", None, target_id)
+        elif proposed.target.kind == "board_slot":
+            entry = board_slot(state, side, proposed.target.index)
+            if entry.kind != "minion":
+                raise RecommendationStateError("target_not_minion")
+            target_id = getattr(entry.entity, "entity_id", None)
+            target = Target(
+                side, "minion", entry.collection_index, target_id)
+        else:
+            raise RecommendationStateError("hero_power_target_unsupported")
+    return AdaptedAction(
+        HeroPowerAction(target=target),
+        getattr(power, "entity_id", None), target_id,
+        "hero_power_changed")
+
+
 def _adapt_attack(proposed, state):
     if proposed.source.kind == "hero":
         hero = getattr(state, "my_hero", None)
@@ -153,8 +196,18 @@ def _adapt_attack(proposed, state):
         if source.kind != "minion":
             raise RecommendationStateError("source_not_minion")
         source_id = getattr(source.entity, "entity_id", None)
+        if source.entity.card_id == "SC_999t":
+            manual = LaunchStarshipAction(
+                source.collection_index,
+                source.entity.card_id,
+                source_id,
+            )
+            return AdaptedAction(
+                manual, source_id, None, "starship_launched")
         source_target = Target(
             "friendly", "minion", source.collection_index, source_id)
+    if proposed.target is None:
+        raise RecommendationStateError("attack_target_required")
     if proposed.target.kind == "hero":
         hero = getattr(state, "oppo_hero", None)
         if hero is None:

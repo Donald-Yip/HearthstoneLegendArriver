@@ -283,6 +283,24 @@ def end_turn():
     left_click(1550, 500)
 
 
+def click_launch_starship():
+    """Click the starship launch button at 1920x1080."""
+    rand_sleep(OPERATE_INTERVAL)
+    left_click(1080, 920)
+
+
+def drag_card_to_deck():
+    """Drag the selected hand card to the friendly deck."""
+    mouse = Controller()
+    mouse.press(Button.left)
+    try:
+        rand_sleep(0.1)
+        mouse.position = (1600, 850)
+        rand_sleep(0.1)
+    finally:
+        mouse.release(Button.left)
+
+
 def commit_error_report():
     # 一些奇怪的错误提示
     left_click(1100, 820)

@@ -247,6 +247,15 @@ class RecommendationFlow:
                 getattr(new, "action_cooldown", 0)
                 != getattr(old, "action_cooldown", 0)
                 or getattr(new, "damage", 0) != getattr(old, "damage", 0))
+        if kind == "starship_launched":
+            old = RecommendationFlow._entity_by_id(
+                before.my_minions, source_entity_id)
+            new = RecommendationFlow._entity_by_id(
+                after.my_minions, source_entity_id)
+            return old is not None and (
+                new is None
+                or getattr(new, "card_id", None)
+                != getattr(old, "card_id", None))
         if kind == "combat_state_changed":
             old_source = RecommendationFlow._entity_by_id(
                 before.my_minions, source_entity_id)

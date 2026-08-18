@@ -8,6 +8,7 @@ from typing import Any, Optional
 class ActionKind(str, Enum):
     MULLIGAN = "mulligan"
     PLAY_CARD = "play_card"
+    TRADE_CARD = "trade_card"
     USE_HERO_POWER = "use_hero_power"
     ATTACK = "attack"
     USE_LOCATION = "use_location"

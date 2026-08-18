@@ -138,7 +138,17 @@ class PlayCardAction:
 
 
 @dataclass(frozen=True)
+class TradeCardAction:
+    hand_index: int
+    card_id: str
+    cardtype: str
+    hand_entity_id: Optional[str] = None
+    turn_number: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class HeroPowerAction:
+    target: Optional[Target] = None
     turn_number: Optional[int] = None
 
 
@@ -166,6 +176,14 @@ class AttackAction:
 
 
 @dataclass(frozen=True)
+class LaunchStarshipAction:
+    starship_index: int
+    card_id: str
+    starship_entity_id: Optional[str] = None
+    turn_number: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class EndTurnAction:
     turn_number: Optional[int] = None
 
@@ -184,10 +202,12 @@ class ActionExecutionResult:
 
 ManualAction = Union[
     PlayCardAction,
+    TradeCardAction,
     HeroPowerAction,
     DiscoverChoiceAction,
     UseLocationAction,
     AttackAction,
+    LaunchStarshipAction,
     EndTurnAction,
     RefreshAction,
 ]
@@ -318,6 +338,15 @@ class ClickExecutor:
             self._click_target(target, my_board_count, oppo_board_count)
         self.click.cancel_click()
 
+    def launch_starship(self, starship_screen_index, board_count):
+        return self._safe_action(lambda: self._launch_starship(
+            starship_screen_index, board_count))
+
+    def _launch_starship(self, starship_screen_index, board_count):
+        self.click.choose_my_board_entity(
+            starship_screen_index, board_count)
+        self.click.click_launch_starship()
+
     def play_weapon(self, hand_index, hand_count):
         return self._safe_action(
             lambda: self._play_weapon(hand_index, hand_count))
@@ -326,11 +355,25 @@ class ClickExecutor:
         self.click.choose_and_use_spell(hand_index, hand_count)
         self.click.cancel_click()
 
-    def use_hero_power(self):
-        return self._safe_action(self._use_hero_power)
+    def trade_card(self, hand_index, hand_count):
+        return self._safe_action(
+            lambda: self._trade_card(hand_index, hand_count))
 
-    def _use_hero_power(self):
-        self.click.use_skill_no_point()
+    def _trade_card(self, hand_index, hand_count):
+        self.click.choose_card(hand_index, hand_count)
+        self.click.drag_card_to_deck()
+
+    def use_hero_power(self, target=None, my_count=0, oppo_count=0):
+        return self._safe_action(lambda: self._use_hero_power(
+            target, my_count, oppo_count))
+
+    def _use_hero_power(self, target, my_count, oppo_count):
+        if target is None:
+            self.click.use_skill_no_point()
+            return
+        self.click.click_skill()
+        self._click_target(target, my_count, oppo_count)
+        self.click.cancel_click()
 
     def choose_discover_card(self, choice_index, choice_count):
         return self._safe_action(
@@ -693,6 +736,21 @@ class ManualController:
         if self.executor is None:
             return self._reject("没有可用的鼠标执行器。")
 
+        if isinstance(action, TradeCardAction):
+            if not 0 <= action.hand_index < len(state.my_hand_cards):
+                return self._reject("手牌位置已经失效，未执行交易。")
+            selected = state.my_hand_cards[action.hand_index]
+            if (selected.card_id != action.card_id
+                    or selected.cardtype != action.cardtype):
+                return self._reject("手牌内容已经变化，未执行交易。")
+            if (action.hand_entity_id is not None
+                    and getattr(selected, "entity_id", None)
+                    != action.hand_entity_id):
+                return self._reject("手牌对象已经变化，未执行交易。")
+            self.executor.trade_card(
+                action.hand_index, len(state.my_hand_cards))
+            return ActionExecutionResult(True, f"已交易手牌：{selected.name}")
+
         if isinstance(action, PlayCardAction):
             if not 0 <= action.hand_index < len(state.my_hand_cards):
                 return self._reject("手牌位置已经失效，未执行操作。")
@@ -718,8 +776,6 @@ class ManualController:
             if action.cardtype == "MINION":
                 my_board_count = self._board_slot_count(state, "friendly")
                 oppo_board_count = self._board_slot_count(state, "enemy")
-                if my_board_count >= 7:
-                    return self._reject("己方场上已满，未执行操作。")
                 if action.gap_index is None or not (
                         0 <= action.gap_index <= my_board_count):
                     return self._reject("随从落点已经失效，未执行操作。")
@@ -763,7 +819,17 @@ class ManualController:
             return ActionExecutionResult(True, f"已执行手牌：{selected.name}")
 
         if isinstance(action, HeroPowerAction):
-            self.executor.use_hero_power()
+            if action.target is None:
+                self.executor.use_hero_power()
+            else:
+                if not self._target_exists(action.target, state):
+                    return self._reject(
+                        "英雄技能目标已经不存在，未执行操作。")
+                self.executor.use_hero_power(
+                    self._target_for_click(action.target, state),
+                    self._board_slot_count(state, "friendly"),
+                    self._board_slot_count(state, "enemy"),
+                )
             return ActionExecutionResult(True, "已使用英雄技能。")
 
         if isinstance(action, DiscoverChoiceAction):
@@ -803,6 +869,23 @@ class ManualController:
                 oppo_board_count,
             )
             return ActionExecutionResult(True, f"已使用地标：{location.name}")
+
+        if isinstance(action, LaunchStarshipAction):
+            if not 0 <= action.starship_index < len(state.my_minions):
+                return self._reject("星舰位置已经失效，未执行发射。")
+            starship = state.my_minions[action.starship_index]
+            if starship.card_id != action.card_id:
+                return self._reject("星舰内容已经变化，未执行发射。")
+            if (action.starship_entity_id is not None
+                    and getattr(starship, "entity_id", None)
+                    != action.starship_entity_id):
+                return self._reject("星舰对象已经变化，未执行发射。")
+            zone_pos = getattr(starship, "zone_pos", 0)
+            board_count = self._board_slot_count(state, "friendly")
+            if not 1 <= zone_pos <= board_count:
+                return self._reject("星舰战场位置已经失效，未执行发射。")
+            self.executor.launch_starship(zone_pos - 1, board_count)
+            return ActionExecutionResult(True, "已发射星舰。")
 
         if isinstance(action, AttackAction):
             if not self._target_exists(action.attacker, state):

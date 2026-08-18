@@ -15,13 +15,16 @@ class RecommendationParser:
     _mulligan = re.compile(r"^替换([1-9]\d*)号位卡牌$")
     _keep_all = "保留全部卡牌"
     _play = re.compile(r"^打出([1-9]\d*)号位(随从|法术|武器|地标|英雄)$")
+    _trade = re.compile(r"^交易([1-9]\d*)号位卡牌$")
     _destination = re.compile(r"^放置于我方([1-9]\d*)号位$")
     _minion_attack = re.compile(r"^操作([1-9]\d*)号位随从攻击$")
     _hero_attack = re.compile(r"^操作我方英雄攻击$")
-    _target = re.compile(r"^目标是(?:对方|敌方)([1-9]\d*)号位$")
+    _target = re.compile(
+        r"^目标是(?:对方|敌方)([1-9]\d*)号位(?:随从)?$")
     _friendly_hand_target = re.compile(
-        r"^目标是(?:己方|我方)([1-9]\d*)号位$")
+        r"^目标是(?:己方|我方)([1-9]\d*)号位(?:随从)?$")
     _enemy_hero_targets = {"目标是对方英雄", "目标是敌方英雄"}
+    _friendly_hero_targets = {"目标是己方英雄", "目标是我方英雄"}
     _location = re.compile(r"^操作([1-9]\d*)号位地标$")
     _discover = re.compile(r"^选择我方([1-3])号位卡牌$")
     _reference_a_headers = {"打法参考A", "打法参考Ａ"}
@@ -119,11 +122,41 @@ class RecommendationParser:
                 target=target,
                 card_type=card_type)
 
-        if primary == "使用英雄技能":
+        trade = self._trade.fullmatch(primary)
+        if trade:
             self._reject_target_lines(lines)
             return self._build(
+                ocr, turn_number, log_revision, ActionKind.TRADE_CARD,
+                source=SlotRef(
+                    "hand_slot", "friendly", int(trade.group(1))))
+
+        if primary == "使用英雄技能":
+            target_lines = [line for line in lines if "目标" in line]
+            if len(target_lines) > 1:
+                raise RecommendationParseError("ambiguous_target")
+            target = None
+            if target_lines:
+                target_line = target_lines[0]
+                enemy_board = self._target.fullmatch(target_line)
+                friendly_board = self._friendly_hand_target.fullmatch(
+                    target_line)
+                if target_line in self._enemy_hero_targets:
+                    target = SlotRef("hero", "enemy")
+                elif target_line in self._friendly_hero_targets:
+                    target = SlotRef("hero", "friendly")
+                elif enemy_board:
+                    target = SlotRef(
+                        "board_slot", "enemy", int(enemy_board.group(1)))
+                elif friendly_board:
+                    target = SlotRef(
+                        "board_slot", "friendly",
+                        int(friendly_board.group(1)))
+                else:
+                    raise RecommendationParseError(
+                        "unsupported_hero_power_target")
+            return self._build(
                 ocr, turn_number, log_revision, ActionKind.USE_HERO_POWER,
-                source=SlotRef("hero_power", "friendly"))
+                source=SlotRef("hero_power", "friendly"), target=target)
 
         discover = self._discover.fullmatch(primary)
         if discover:
@@ -140,14 +173,16 @@ class RecommendationParser:
             targets = [match for match in targets if match]
             targets.extend(
                 line for line in lines if line in self._enemy_hero_targets)
-            if len(targets) != 1:
+            if len(targets) > 1 or (not targets and hero_attack):
                 raise RecommendationParseError("attack_target_required")
             source = (SlotRef("board_slot", "friendly", int(attack.group(1)))
                       if attack else SlotRef("hero", "friendly"))
-            target = (SlotRef("hero", "enemy")
-                      if targets[0] in self._enemy_hero_targets
-                      else SlotRef("board_slot", "enemy",
-                                   int(targets[0].group(1))))
+            target = None
+            if targets:
+                target = (SlotRef("hero", "enemy")
+                          if targets[0] in self._enemy_hero_targets
+                          else SlotRef("board_slot", "enemy",
+                                       int(targets[0].group(1))))
             return self._build(
                 ocr, turn_number, log_revision, ActionKind.ATTACK,
                 source=source, target=target)
@@ -191,6 +226,7 @@ class RecommendationParser:
 
     def _is_action_line(self, line):
         return bool(self._mulligan.fullmatch(line) or self._play.fullmatch(line)
+                    or self._trade.fullmatch(line)
                     or self._minion_attack.fullmatch(line)
                     or self._hero_attack.fullmatch(line)
                     or self._location.fullmatch(line)
