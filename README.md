@@ -258,7 +258,7 @@ AAEBAa35AwaPggPV0QP5xgXxoQb2oQbGsgcMzge1uQPQ4QOYkgWrkgWVygbXlweEmQekrQfWvgfZvgfP
 
 建议在 Issue 中尽量提供：
 
-- 🐛 **Bug 反馈**：说明问题现象、复现步骤和运行环境
+- 🐛 **Bug 反馈以及游戏界面运行截图**：说明问题现象、复现步骤和运行环境附上运行截图
 - 💡 **功能建议**：描述希望支持的功能或使用场景
 - 🃏 **卡组适配**：注明卡组名称、相关交互以及异常情况
 - 🖼️ **界面问题**：如涉及点击坐标或 UI 变化，建议附截图

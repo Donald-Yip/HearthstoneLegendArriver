@@ -15,7 +15,7 @@ class RecommendationParser:
     _mulligan = re.compile(r"^替换([1-9]\d*)号位卡牌$")
     _keep_all = "保留全部卡牌"
     _play = re.compile(r"^打出([1-9]\d*)号位(随从|法术|武器|地标|英雄)$")
-    _trade = re.compile(r"^交易([1-9]\d*)号位卡牌$")
+    _trade = re.compile(r"^(?:交易|锻造|预备)([1-9]\d*)号位卡牌$")
     _destination = re.compile(r"^放置于我方([1-9]\d*)号位$")
     _minion_attack = re.compile(r"^操作([1-9]\d*)号位随从攻击$")
     _hero_attack = re.compile(r"^操作我方英雄攻击$")
