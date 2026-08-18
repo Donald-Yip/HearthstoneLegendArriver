@@ -113,22 +113,26 @@ def _adapt_play_card(proposed, state):
             manual_target = Target(
                 "friendly", "hand", target_index)
         elif proposed.card_type == "SPELL":
-            if (proposed.target.owner != "enemy"
-                    or proposed.target.kind not in {"board_slot", "hero"}):
+            if proposed.target.owner not in {"friendly", "enemy"}:
                 raise RecommendationStateError("spell_target_unsupported")
             if proposed.target.kind == "hero":
-                hero = getattr(state, "oppo_hero", None)
+                hero = (getattr(state, "my_hero", None)
+                        if proposed.target.owner == "friendly"
+                        else getattr(state, "oppo_hero", None))
                 if hero is None:
-                    raise RecommendationStateError("enemy_hero_missing")
+                    raise RecommendationStateError("spell_target_missing")
                 target_id = getattr(hero, "entity_id", None)
-                manual_target = Target("enemy", "hero", None, target_id)
+                manual_target = Target(
+                    proposed.target.owner, "hero", None, target_id)
             else:
-                target = board_slot(state, "enemy", proposed.target.index)
+                target = board_slot(
+                    state, proposed.target.owner, proposed.target.index)
                 if target.kind != "minion":
                     raise RecommendationStateError("target_not_minion")
                 target_id = getattr(target.entity, "entity_id", None)
                 manual_target = Target(
-                    "enemy", "minion", target.collection_index, target_id)
+                    proposed.target.owner, "minion",
+                    target.collection_index, target_id)
         else:
             raise RecommendationStateError("targeted_action_unsupported")
     manual = PlayCardAction(

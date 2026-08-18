@@ -74,23 +74,38 @@ class RecommendationParser:
                          "英雄": "HERO"}[play.group(2)]
             target = None
             if card_type == "SPELL":
-                board_targets = [
+                enemy_board_targets = [
                     match for line in lines
                     if (match := self._target.fullmatch(line))
                 ]
-                hero_targets = sum(
+                friendly_board_targets = [
+                    match for line in lines
+                    if (match := self._friendly_hand_target.fullmatch(line))
+                ]
+                enemy_hero_targets = sum(
                     line in self._enemy_hero_targets for line in lines)
+                friendly_hero_targets = sum(
+                    line in self._friendly_hero_targets for line in lines)
                 target_lines = [line for line in lines if "目标" in line]
                 if len(target_lines) > 1:
                     raise RecommendationParseError("ambiguous_target")
-                if target_lines and len(board_targets) + hero_targets != 1:
+                target_count = (
+                    len(enemy_board_targets) + len(friendly_board_targets)
+                    + enemy_hero_targets + friendly_hero_targets)
+                if target_lines and target_count != 1:
                     raise RecommendationParseError("unsupported_spell_target")
-                if board_targets:
+                if enemy_board_targets:
                     target = SlotRef(
                         "board_slot", "enemy",
-                        int(board_targets[0].group(1)))
-                elif hero_targets:
+                        int(enemy_board_targets[0].group(1)))
+                elif friendly_board_targets:
+                    target = SlotRef(
+                        "board_slot", "friendly",
+                        int(friendly_board_targets[0].group(1)))
+                elif enemy_hero_targets:
                     target = SlotRef("hero", "enemy")
+                elif friendly_hero_targets:
+                    target = SlotRef("hero", "friendly")
             elif card_type == "MINION":
                 hand_targets = [
                     match for line in lines
