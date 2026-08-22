@@ -263,8 +263,12 @@ class ClickExecutor:
 
     def _play_minion(self, hand_index, hand_count, gap_index, minion_count,
                      oppo_minion_count, target):
-        self.click.choose_card(hand_index, hand_count)
-        self.click.put_minion(gap_index, minion_count)
+        if minion_count >= 7:
+            self.click.drag_card_to_board_entity(
+                hand_index, hand_count, gap_index, minion_count)
+        else:
+            self.click.choose_card(hand_index, hand_count)
+            self.click.put_minion(gap_index, minion_count)
         # Let the board fan-out settle briefly before clicking the target.
         if target is not None:
             # Friendly hand targets are exclusively allowed for CATA_490 by

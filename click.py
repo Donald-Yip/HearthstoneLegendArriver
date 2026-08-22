@@ -103,24 +103,16 @@ def _send_physical_click(mouse, x, y, button):
 def click_button(x, y, button, require_hearthstone=True):
     # x = position_x(x)
     # y = position_y(y)
-    if require_hearthstone:
-        hearthstone_hwnd = get_HS_hwnd()
-        if hearthstone_hwnd == 0:
-            raise RuntimeError("未找到炉石传说窗口")
-        if not point_targets_hearthstone(x, y, hearthstone_hwnd):
-            raise RuntimeError(
-                f"点击位置 ({x}, {y}) 被炉石传说盒子或其他窗口遮挡")
+    hearthstone_hwnd = get_HS_hwnd() if require_hearthstone else 0
     mouse = Controller()
     rand_sleep(0.1)
     if (require_hearthstone
+            and hearthstone_hwnd != 0
             and win32gui.GetForegroundWindow() != hearthstone_hwnd):
         # The first physical click on a background Unity window can be
         # consumed solely to activate it. Activate via the same harmless
         # right-side point used by cancel_click, then send the real action.
         activate_x, activate_y = 1800, 500
-        if not point_targets_hearthstone(
-                activate_x, activate_y, hearthstone_hwnd):
-            raise RuntimeError("炉石传说安全激活位置被其他窗口遮挡")
         _send_physical_click(
             mouse, activate_x, activate_y, Button.right)
         rand_sleep(0.25)
@@ -245,6 +237,23 @@ def click_setting():
 def choose_and_use_spell(card_index, card_num):
     choose_card(card_index, card_num)
     click_middle()
+
+
+def drag_card_to_board_entity(card_index, card_num, entity_index, entity_num):
+    """Drag a hand card just left of an existing friendly board entity."""
+    assert 0 <= card_index < card_num <= 10
+    assert 0 <= entity_index < entity_num <= 7
+
+    mouse = Controller()
+    mouse.position = (HAND_CARD_X[card_num][card_index], 1000)
+    rand_sleep(0.1)
+    mouse.press(Button.left)
+    try:
+        board_x = 960 - (entity_num - 1) * 70 + entity_index * 140
+        mouse.position = (board_x - 25, 600)
+        rand_sleep(0.1)
+    finally:
+        mouse.release(Button.left)
 
 
 # 第[i]个随从左边那个空隙记为第[i]个gap
