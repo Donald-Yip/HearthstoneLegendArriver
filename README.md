@@ -141,8 +141,6 @@ cd /d D:\HSLegendArriver
 pip install -r requirements.txt
 ```
 
-> 💡 依赖已锁定为实测可用版本；项目自带的 `.venv` 只是开发环境（绑定本机路径，无需也无法随仓库分发），其他机器直接装依赖即可。
-> 💡 首次运行会自动联网下载 OCR 模型（约几十 MB，保存到 `%LOCALAPPDATA%\AutoHS\ocr_models`）。
 
 启动：
 
