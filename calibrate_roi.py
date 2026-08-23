@@ -341,6 +341,8 @@ class Calibrator:
                 self.crop_event.clear()
                 if not self.running:
                     break
+                # 节流：拖动时截图事件密，限制 OCR 最小间隔，避免满速空转拖卡主循环
+                time.sleep(0.25)
                 crop = self.last_crop
                 if crop is None:
                     continue
