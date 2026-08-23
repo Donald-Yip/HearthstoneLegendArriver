@@ -25,41 +25,6 @@ def _user_roi() -> Optional[tuple[int, int, int, int]]:
     return None
 
 
-def _system_dpi() -> int:
-    """读取当前系统 DPI（GetDpiForSystem）；失败回退 96。
-
-    关键：以前 desktop_dpi 硬编码 96，导致在 125%/150% 缩放的电脑上
-    （GetDpiForSystem=120/144）被 desktop_capture/validator 硬判 dpi 不匹配，
-    OCR 直接不可用。改为按机器实际 DPI 取值后，这些机器不再被卡死。
-    """
-    try:
-        import ctypes
-        return int(ctypes.windll.user32.GetDpiForSystem())
-    except Exception:
-        return 96
-
-
-def _user_desktop() -> tuple[Optional[tuple[int, int]], Optional[int]]:
-    """ui_config.json 的 desktop_size / desktop_dpi（校准工具可写入）。
-
-    返回 (size, dpi)；任一缺失/非法时该位为 None，走默认/自动探测。
-    """
-    try:
-        cfg_path = Path(__file__).resolve().parents[1] / "ui_config.json"
-        data = json.loads(cfg_path.read_text(encoding="utf-8"))
-        size = data.get("desktop_size")
-        dpi = data.get("desktop_dpi")
-        size_vals = None
-        if size:
-            vals = tuple(int(v) for v in size)
-            if len(vals) == 2 and vals[0] > 0 and vals[1] > 0:
-                size_vals = vals
-        dpi_val = int(dpi) if dpi else None
-        return size_vals, dpi_val
-    except Exception:
-        return None, None
-
-
 @dataclass(frozen=True)
 class RecommendationConfig:
     # ------------------------------------------------------------------ 屏幕
@@ -115,9 +80,3 @@ class RecommendationConfig:
         roi = _user_roi()
         if roi is not None:
             object.__setattr__(self, "recommendation_roi", roi)
-        # 允许 ui_config 覆盖桌面尺寸（多分辨率），否则保留默认。
-        size, dpi = _user_desktop()
-        if size is not None:
-            object.__setattr__(self, "desktop_size", size)
-        # DPI 默认按机器实际取值：避免在非 100% 缩放电脑上被 96 硬判失败。
-        object.__setattr__(self, "desktop_dpi", dpi if dpi else _system_dpi())
