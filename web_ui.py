@@ -531,7 +531,7 @@ def api_schedule(body: dict):
 
 
 def api_calibrate():
-    """启动推荐区域校准工具（绿框对齐 + 实时 OCR 预览）。"""
+    """启动推荐区域校准工具（绿框对齐，无实时 OCR 预览窗）。"""
     script = ROOT / "calibrate_roi.py"
     if not script.exists():
         return {"ok": False, "error": f"校准工具缺失：{script}"}
@@ -539,8 +539,8 @@ def api_calibrate():
         subprocess.Popen([sys.executable, str(script)], cwd=str(ROOT))
     except Exception as exc:
         return {"ok": False, "error": f"启动校准工具失败：{exc}"}
-    _log("SYS", "已启动推荐区域校准：拖绿框对齐盒子面板，[保存] 写入，Esc 退出。")
-    return {"ok": True, "message": "校准工具已启动（屏幕右侧为实时 OCR 预览）"}
+    _log("SYS", "已启动推荐区域校准：拖绿框对齐盒子面板，按 S 保存，Esc 退出。")
+    return {"ok": True, "message": "校准工具已启动（无预览：拖绿框对齐盒子面板后按 S 保存，Esc 退出）"}
 
 
 def api_cancel_schedule():
