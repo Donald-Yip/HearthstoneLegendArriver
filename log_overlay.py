@@ -5,8 +5,8 @@ start() launches a background thread that shows a small always-on-top
 window at the bottom-right, streaming the latest automation log lines.
 Lines that mark "own turn starts" are highlighted green.
 
-This module is defensive: any window/render failure just disables the
-overlay; it never raises into the caller.
+Defensive: any window/render failure disables the overlay; it never
+raises into the caller.
 """
 from __future__ import annotations
 
@@ -39,10 +39,10 @@ MAX_LINES = 22
 REFRESH = 0.35
 FONT_PATH = r"C:\Windows\Fonts\msyh.ttc"
 
-GREEN = (96, 226, 96)   # own-turn-start line
+GREEN = (96, 226, 96)
 WHITE = (240, 240, 240)
 DIM = (168, 172, 180)
-PANEL_BG = (24, 28, 34)  # BGR, semi-transparent dark
+PANEL_BG = (24, 28, 34)
 BORDER = (118, 124, 132)
 
 
@@ -81,12 +81,10 @@ _STARTED = [False]
 
 
 def _turn_start(line: str) -> bool:
-    """Return True when a line marks the own turn beginning / delay."""
     return ("回合" in line and "延时" in line) or ("轮到己方" in line)
 
 
 def push(line: str, _level: str = "INFO") -> None:
-    """Append a log line for the overlay (thread-safe, no-op if not started)."""
     if not _STARTED[0]:
         return
     line = str(line).rstrip()
@@ -107,6 +105,7 @@ def _font(size: int):
 
 
 def _draw_text(img, text, font, xy, color):
+    """Draw text on a 3-channel BGR image."""
     if not text or font is None:
         return
     h, w = img.shape[:2]
@@ -117,42 +116,66 @@ def _draw_text(img, text, font, xy, color):
     img[:h, :w] = out[:h, :w]
 
 
-def _render() -> np.ndarray:
+def _to_bgra(img3):
+    out = cv2.cvtColor(img3, cv2.COLOR_BGR2BGRA)
+    out[:, :, 3] = 215
+    return out
+
+
+def _render():
     with _LOCK:
         lines = list(_LINES)[-MAX_LINES:]
-    layer = np.zeros((PANEL_H, PANEL_W, 4), dtype=np.uint8)
-    layer[:, :, 0:3] = PANEL_BG
-    layer[:, :, 3] = 215
+    img = np.full((PANEL_H, PANEL_W, 3), PANEL_BG, dtype=np.uint8)
     font = _font(13)
     if font is None:
-        return layer
-    title = "自动化日志  (回合开始=绿)"
-    _draw_text(layer, title, _font(13), (8, 4), WHITE)
+        return _to_bgra(img)
+    _draw_text(img, "自动化日志  (回合开始=绿)", _font(13), (8, 4), WHITE)
     y = 26
     for text, turn in lines[-MAX_LINES:]:
-        color = GREEN if turn else (WHITE if text.startswith(("[推荐]", "[执行]"))
-                                    else DIM)
-        _draw_text(layer, text[:40], font, (8, y), color)
+        color = GREEN if turn else (
+            WHITE if text.startswith(("[推荐]", "[执行]")) else DIM)
+        _draw_text(img, text[:40], font, (8, y), color)
         y += 14
         if y > PANEL_H - 12:
             break
-    layer[0, :, 0:3] = BORDER
-    layer[-1, :, 0:3] = BORDER
-    return layer
+    img[0, :, :] = BORDER
+    img[-1, :, :] = BORDER
+    return _to_bgra(img)
 
 
 def start() -> None:
-    """Launch the overlay thread (idempotent)."""
     if _STARTED[0]:
         return
     _STARTED[0] = True
     threading.Thread(target=_run, name="hs-log-overlay", daemon=True).start()
 
 
+def _create_window():
+    try:
+        USER32.SetProcessDpiAwareness(2)
+    except Exception:
+        pass
+    inst = KERNEL32.GetModuleHandleW(None)
+    wc = _WNDCLASSW()
+    wc.lpfnWndProc = ctypes.cast(_WNDPROC_IMPL, ctypes.c_void_p).value
+    wc.hInstance = inst
+    wc.lpszClassName = CLASS_NAME
+    USER32.RegisterClassW(ctypes.byref(wc))
+    sw = USER32.GetSystemMetrics(0)
+    sh = USER32.GetSystemMetrics(1)
+    x = sw - PANEL_W - 12
+    y = sh - PANEL_H - 12
+    return USER32.CreateWindowExW(
+        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        CLASS_NAME, "HSLegendArriver 日志", WS_POPUP | WS_VISIBLE,
+        x, y, PANEL_W, PANEL_H, None, None, inst, None)
+
+
 def _run() -> None:
     try:
         hwnd = _create_window()
         if not hwnd:
+            print("[overlay] 日志浮窗创建失败(hwnd=0)")
             _STARTED[0] = False
             return
         hdc = USER32.GetDC(None)
@@ -187,27 +210,6 @@ def _run() -> None:
         _STARTED[0] = False
 
 
-def _create_window():
-    try:
-        USER32.SetProcessDpiAwareness(2)  # may fail; ignore
-    except Exception:
-        pass
-    inst = KERNEL32.GetModuleHandleW(None)
-    wc = _WNDCLASSW()
-    wc.lpfnWndProc = ctypes.cast(_WNDPROC_IMPL, ctypes.c_void_p).value
-    wc.hInstance = inst
-    wc.lpszClassName = CLASS_NAME
-    USER32.RegisterClassW(ctypes.byref(wc))
-    sw = USER32.GetSystemMetrics(0)
-    sh = USER32.GetSystemMetrics(1)
-    x = sw - PANEL_W - 12
-    y = sh - PANEL_H - 12
-    return USER32.CreateWindowExW(
-        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-        CLASS_NAME, "HSLegendArriver 日志", WS_POPUP | WS_VISIBLE,
-        x, y, PANEL_W, PANEL_H, None, None, inst, None)
-
-
 def _passive_wndproc(hwnd, msg, wparam, lparam):
     return USER32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
@@ -216,8 +218,7 @@ _WNDPROC_IMPL = ctypes.WINFUNCTYPE(
     ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT,
     wintypes.WPARAM, wintypes.LPARAM)(_passive_wndproc)
 
-
-# set argtypes/restypes so 64-bit handles are not truncated
+# --- argtypes/restype so 64-bit handles/params are not truncated ---
 USER32.RegisterClassW.argtypes = [ctypes.c_void_p]
 USER32.RegisterClassW.restype = ctypes.c_ushort
 USER32.CreateWindowExW.argtypes = [wintypes.DWORD, wintypes.LPCWSTR,
@@ -226,6 +227,9 @@ USER32.CreateWindowExW.argtypes = [wintypes.DWORD, wintypes.LPCWSTR,
                                    ctypes.c_int, wintypes.HWND, wintypes.HMENU,
                                    wintypes.HINSTANCE, wintypes.LPVOID]
 USER32.CreateWindowExW.restype = wintypes.HWND
+USER32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                  wintypes.WPARAM, wintypes.LPARAM]
+USER32.DefWindowProcW.restype = ctypes.c_ssize_t
 USER32.UpdateLayeredWindow.argtypes = [wintypes.HWND, wintypes.HDC,
                                        ctypes.c_void_p, ctypes.c_void_p,
                                        wintypes.HDC, ctypes.c_void_p,
