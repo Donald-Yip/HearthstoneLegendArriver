@@ -402,8 +402,7 @@ class Calibrator:
     def _paint(self, sw: int, sh: int) -> np.ndarray:
         layer = np.zeros((sh, sw, 4), dtype=np.uint8)  # 内存序即 DIB BGRA
         l, t, r, b = self.roi
-        ok = bool(self.ocr_result.get("beacon"))
-        color = GREEN if ok else ORANGE
+        color = GREEN
         alpha = layer[:, :, 3]
         band = np.zeros((sh, sw), dtype=bool)
         # 四周边框，画在截图区域【外侧】，捕捉画面保持干净
@@ -426,8 +425,6 @@ class Calibrator:
             y, x = hy + i, hx + i
             if x < hx1 and y < hy1:
                 layer[y, x, 0:3] = TEXT_MAIN
-        # 预览窗
-        self._draw_preview(layer, sw, sh)
         return layer
 
     def _draw_preview(self, layer: np.ndarray, sw: int, sh: int):
@@ -563,8 +560,8 @@ class Calibrator:
             return 1
         print(f"[校准] 屏幕 {sw}x{sh}，当前推荐区域 recommendation_roi="
               f"{tuple(self.roi)}")
-        print("[校准] 拖动绿框->对齐盒子面板->[保存]，Esc 退出。"
-              "（窗口置顶，空白处鼠标可穿透操作游戏）")
+        print("[校准] 拖动绿框->对齐盒子面板->按 S 保存，Esc 退出。"
+              "（窗口置顶，空白处鼠标可穿透操作游戏，无预览窗）")
         hdc = USER32.GetDC(None)
         mem_dc = GDI32.CreateCompatibleDC(hdc)
         bmi = BITMAPINFO()
@@ -585,7 +582,6 @@ class Calibrator:
         pt_src = wintypes.POINT(0, 0)
         deadline = time.time() + 1.3 if self.selftest else None
         self._start_ocr_thread()
-        self._do_capture()
         try:
             while self.running:
                 # 排空消息队列（拖动时消息密，必须全部处理）
