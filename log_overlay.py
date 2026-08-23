@@ -38,11 +38,24 @@ def push(line: str, _level: str = "INFO") -> None:
         _LINES.append((line, _turn_start(line)))
 
 
+_STOP = threading.Event()
+
+
 def start() -> None:
     if _STARTED[0]:
         return
+    _STOP.clear()
     _STARTED[0] = True
     threading.Thread(target=_run, name="hs-log-overlay", daemon=True).start()
+
+
+def stop() -> None:
+    """Signal the overlay thread to close its window."""
+    _STOP.set()
+
+
+def is_running() -> bool:
+    return bool(_STARTED[0])
 
 
 def _run() -> None:
@@ -93,6 +106,10 @@ def _run() -> None:
         root.bind("<B1-Motion>", _on_drag)
 
         def _update():
+            if _STOP.is_set():
+                root.destroy()
+                _STARTED[0] = False
+                return
             with _LOCK:
                 lines = list(_LINES)[-40:]
             pos = text.yview()

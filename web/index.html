@@ -203,6 +203,7 @@ input:disabled{opacity:.45;cursor:not-allowed}
       <h2 class="card-title">🕹️ 对战控制</h2>
       <div class="btn-row big">
         <button id="btnStart" class="btn btn-primary btn-big" type="button">⚔️ 开始对战</button>
+        <button id="btnOverlay" class="btn" type="button">🪟 日志浮窗（关）</button>
         <button id="btnAfterGame" class="btn btn-warn" type="button" disabled>本局结束后停止</button>
         <button id="btnStopNow" class="btn btn-danger" type="button" disabled>立即停止</button>
       </div>
@@ -496,6 +497,17 @@ $("btnCalibrate").addEventListener("click", function(){
 });
 
 /* ---------- 对战控制 ---------- */
+$("btnOverlay").addEventListener("click", function(){
+  var btn = $("btnOverlay");
+  post("/api/overlay", {}).then(function(r){
+    if (r.ok) {
+      toast(r.message || (r.enabled ? "日志浮窗已开启" : "日志浮窗已关闭"), "ok");
+      btn.textContent = "🪟 日志浮窗（" + (r.enabled ? "开" : "关") + "）";
+    } else {
+      toast(r.error || "切换失败", "error");
+    }
+  });
+});
 $("btnStart").addEventListener("click", function(){
   var go = function(){
     $("btnStart").disabled = true;

@@ -558,6 +558,17 @@ def api_calibrate():
     return {"ok": True, "message": "校准工具已启动（无预览：拖绿框对齐盒子面板后按 S 保存，Esc 退出）"}
 
 
+def api_toggle_overlay(body=None):
+    """开/关右上角实时日志浮窗。"""
+    if log_overlay is None:
+        return {"ok": False, "error": "日志浮窗模块不可用"}
+    if log_overlay.is_running():
+        log_overlay.stop()
+        return {"ok": True, "enabled": False, "message": "日志浮窗已关闭"}
+    log_overlay.start()
+    return {"ok": True, "enabled": True, "message": "日志浮窗已开启"}
+
+
 def api_cancel_schedule():
     with CTRL.lock:
         if CTRL.automation_thread is not None:
@@ -722,6 +733,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_cancel_schedule())
             elif path == "/api/calibrate":
                 self._json(api_calibrate())
+            elif path == "/api/overlay":
+                self._json(api_toggle_overlay(body))
             else:
                 self._json({"ok": False, "error": "未知接口"}, 404)
         except Exception as exc:
