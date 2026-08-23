@@ -237,6 +237,7 @@ class Calibrator:
         self.roi = _current_roi()
         self.drag = None            # None | ("move", dx, dy) | ("resize",)
         self.save_pending = False
+        self.capture_pending = False
         self.saved_flash_until = 0.0
         self.last_crop = None
         self.crop_event = threading.Event()
@@ -257,14 +258,19 @@ class Calibrator:
         panel_h = min(panel_h, sh - 20)
         px = max(8, sw - panel_w - 12)
         py = 16
-        btn = (px + panel_w - 130, py + panel_h - 44,
-               px + panel_w - 12, py + panel_h - 12)
-        return (px, py, px + panel_w, py + panel_h), btn
+        save_btn = (px + panel_w - 130, py + panel_h - 44,
+                    px + panel_w - 12, py + panel_h - 12)
+        capture_btn = (px + 12, py + panel_h - 44,
+                       px + panel_w - 142, py + panel_h - 12)
+        return (px, py, px + panel_w, py + panel_h), save_btn, capture_btn
 
     def _hit_test(self, sx: int, sy: int, sw: int, sh: int):
         l, t, r, b = self.roi
-        _, btn = self.preview_rect(sw, sh)
-        if btn[0] <= sx <= btn[2] and btn[1] <= sy <= btn[3]:
+        _, save_btn, capture_btn = self.preview_rect(sw, sh)
+        if (capture_btn[0] <= sx <= capture_btn[2]
+                and capture_btn[1] <= sy <= capture_btn[3]):
+            return "btn_capture"
+        if save_btn[0] <= sx <= save_btn[2] and save_btn[1] <= sy <= save_btn[3]:
             return "btn_save"
         if r + 2 <= sx <= r + 2 + HANDLE and b + 2 <= sy <= b + 2 + HANDLE:
             return "corner"
@@ -275,7 +281,9 @@ class Calibrator:
     # ------------------------------------------------------------ 事件
     def _on_mouse_down(self, sx: int, sy: int, sw: int, sh: int):
         kind = self._hit_test(sx, sy, sw, sh)
-        if kind == "btn_save":
+        if kind == "btn_capture":
+            self.capture_pending = True
+        elif kind == "btn_save":
             self.save_pending = True
         elif kind == "corner":
             self.drag = ("resize",)
@@ -286,6 +294,10 @@ class Calibrator:
         USER32.SetCapture(self.hwnd)
 
     def _on_mouse_up(self, sx: int, sy: int, sw: int, sh: int):
+        if self.capture_pending:
+            self.capture_pending = False
+            if self._hit_test(sx, sy, sw, sh) == "btn_capture":
+                self._do_capture()
         if self.save_pending:
             self.save_pending = False
             if self._hit_test(sx, sy, sw, sh) == "btn_save":
@@ -378,6 +390,14 @@ class Calibrator:
         threading.Thread(target=self._ocr_worker, name="calib-ocr",
                          daemon=True).start()
 
+    def _do_capture(self):
+        """手动触发一次：抓取当前推荐区域并刷新 OCR 预览。"""
+        l, t, r, b = self.roi
+        crop = _grab_crop(l, t, r, b)
+        if crop is not None:
+            self.last_crop = crop
+            self.crop_event.set()
+
     # ------------------------------------------------------------ 渲染
     def _paint(self, sw: int, sh: int) -> np.ndarray:
         layer = np.zeros((sh, sw, 4), dtype=np.uint8)  # 内存序即 DIB BGRA
@@ -411,7 +431,7 @@ class Calibrator:
         return layer
 
     def _draw_preview(self, layer: np.ndarray, sw: int, sh: int):
-        (px, py, px1, py1), btn = self.preview_rect(sw, sh)
+        (px, py, px1, py1), save_btn, capture_btn = self.preview_rect(sw, sh)
         panel_w = px1 - px
         panel_h = py1 - py
         panel = np.full((panel_h, panel_w, 3), PANEL_BG, dtype=np.uint8)
@@ -465,8 +485,16 @@ class Calibrator:
                         font=_font(12), xy=(10, max(4, min(panel_h - 78,
                                                           ys + 8 * 17 + 8))),
                         color=TEXT_DIM)
+        # 截图按钮
+        cx0, cy0, cx1, cy1 = capture_btn
+        c_btn_w, c_btn_h = cx1 - cx0, cy1 - cy0
+        c_btn_img = np.full((c_btn_h, c_btn_w, 3), BTN_BLUE, dtype=np.uint8)
+        self._draw_text(c_btn_img, "截图", font=_font(15),
+                        xy=(c_btn_w // 2 - 16, c_btn_h // 2 - 10),
+                        color=TEXT_MAIN)
+        panel[cy0 - py:cy1 - py, cx0 - px:cx1 - px] = c_btn_img
         # 保存按钮
-        bx0, by0, bx1, by1 = btn
+        bx0, by0, bx1, by1 = save_btn
         btn_w, btn_h = bx1 - bx0, by1 - by0
         btn_img = np.full((btn_h, btn_w, 3), BTN_BLUE, dtype=np.uint8)
         self._draw_text(btn_img, "保存 (S)", font=_font(15),
@@ -557,6 +585,7 @@ class Calibrator:
         pt_src = wintypes.POINT(0, 0)
         deadline = time.time() + 1.3 if self.selftest else None
         self._start_ocr_thread()
+        self._do_capture()
         try:
             while self.running:
                 # 排空消息队列（拖动时消息密，必须全部处理）
@@ -577,11 +606,6 @@ class Calibrator:
                     self.save_roi(flash=True)
                 self._shed = s_key
                 if self.running:
-                    l, t, r, b = self.roi
-                    crop = _grab_crop(l, t, r, b)
-                    if crop is not None:
-                        self.last_crop = crop
-                        self.crop_event.set()
                     layer = self._paint(sw, sh)
                     ctypes.memmove(bits.value, layer.tobytes(), layer.nbytes)
                     USER32.UpdateLayeredWindow(
