@@ -182,7 +182,8 @@ def _run() -> None:
                     mem_dc, ctypes.byref(pt_src), 0, ctypes.byref(blend),
                     ULW_ALPHA)
             time.sleep(REFRESH)
-    except Exception:
+    except Exception as exc:
+        print(f"[overlay] 日志浮窗禁用: {type(exc).__name__}: {exc}")
         _STARTED[0] = False
 
 
