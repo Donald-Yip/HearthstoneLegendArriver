@@ -59,10 +59,13 @@ def _run() -> None:
         root.attributes("-alpha", 0.92)
         sw = root.winfo_screenwidth()
         sh = root.winfo_screenheight()
-        W, H = 460, 342
+        W, H = 276, 342
         x = sw - W - 12
-        y = sh - H - 12
+        y = 12
         root.geometry(f"{W}x{H}+{x}+{y}")
+        title = tk.Label(root, text="自动化日志", bg=BG, fg="#e0e0e0",
+                         font=("Microsoft YaHei", 10, "bold"))
+        title.pack(fill="x")
         text = tk.Text(root, bg=BG, fg="white", font=("Microsoft YaHei", 10),
                        bd=0, highlightthickness=0, wrap="none")
         text.pack(fill="both", expand=True)

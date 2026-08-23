@@ -757,9 +757,6 @@ def _boot_resume_schedule():
 
 def main():
     os.chdir(ROOT)
-    # 日志浮窗一启动就创建（不依赖进对局）；失败只影响显示，不崩后端。
-    if log_overlay is not None:
-        log_overlay.start()
     cfg = load_config()
     _apply_constants(cfg.get("name") or "", cfg.get("log_root") or "")
     _boot_resume_schedule()
