@@ -41,9 +41,14 @@ def push(line: str, _level: str = "INFO") -> None:
 _STOP = threading.Event()
 
 
-def start() -> None:
+_ON_START = None
+
+
+def start(on_start=None) -> None:
+    global _ON_START
     if _STARTED[0]:
         return
+    _ON_START = on_start
     _STOP.clear()
     _STARTED[0] = True
     threading.Thread(target=_run, name="hs-log-overlay", daemon=True).start()
@@ -79,6 +84,15 @@ def _run() -> None:
         title = tk.Label(root, text="自动化日志", bg=BG, fg="#e0e0e0",
                          font=("Microsoft YaHei", 10, "bold"))
         title.pack(fill="x")
+
+        def _call_start():
+            if _ON_START is not None:
+                _ON_START()
+
+        start_btn = tk.Button(root, text="▶ 开始对战", bg="#2d6cdf", fg="white",
+                              font=("Microsoft YaHei", 10, "bold"),
+                              command=_call_start)
+        start_btn.pack(fill="x")
         body = tk.Frame(root, bg=BG)
         body.pack(fill="both", expand=True)
         text = tk.Text(body, bg=BG, fg="white", font=("Microsoft YaHei", 10),
