@@ -192,7 +192,10 @@ class DesktopCapture:
         if roi.size == 0 or float(np.std(roi)) < 8.0:
             return False
         # HSAng uses a dark red header at the top of this fixed panel.
-        header = roi[:45]
+        # 红头在参考布局下约占 45/300 = 15%，按 ROI 高度比例取值以兼容不同
+        # 电脑/缩放下的面板大小。
+        height = roi.shape[0]
+        header = roi[: max(8, int(height * 0.15))]
         b, g, r = cv2.split(header)
         red_dark = (r > g * 1.25) & (r > b * 1.15) & (r < 140)
         return float(np.mean(red_dark)) > 0.08
