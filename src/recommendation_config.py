@@ -55,7 +55,7 @@ class RecommendationConfig:
     # ------------------------------------------------------------------ 出牌
     # 每个新回合开始延时一次（给盒子更新推荐留时间），
     # 同回合内多次出牌操作之间不重复延时。
-    pre_action_delay_seconds: float = 3.0
+    pre_action_delay_seconds: float = 4.0
     # 一次操作执行完成之后到下轮截图+OCR 的延时（0 = 立即开始）；
     # 配合上面"回合只延时一次"使用。
     post_action_delay_seconds: float = 0.0
@@ -67,7 +67,7 @@ class RecommendationConfig:
     # 预处理缩放倍数：1.5x 是实测识别精度/速度最佳点
     # （1.0x 快约 28% 但识别率下降不可接受；3.0x 无效且慢）。
     # 仍可用环境变量 OCR_PREPROCESS_SCALE 临时覆盖。
-    ocr_preprocess_scale: float = 1.5
+    ocr_preprocess_scale: float = 1.4
     # 自动线程数下限：OpenMP/MKL 线程默认取机器物理核数，
     # 低于此下限固定为此值（核数少的机器保守）。
     ocr_thread_min: int = 4

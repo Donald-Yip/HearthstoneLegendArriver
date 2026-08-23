@@ -68,27 +68,6 @@ class RecommendationFlow:
                 frame_supplier, self.capture.crop_recommendation)
             stable_frame = observed["frame"]
             if self.waiting_instruction is not None:
-                same_instruction = (
-                    evidence.normalized_text == self.waiting_instruction)
-                if (same_instruction
-                        and self.waiting_action_kind
-                        == ActionKind.CHOOSE_DISCOVER):
-                    if getattr(state, "discover_choice_count", None) in (
-                            1, 2, 3):
-                        self._clear_waiting()
-                        return FlowStepResult(
-                            FlowStepStatus.RETRY,
-                            "discover_choice_still_open")
-                    return FlowStepResult(
-                        FlowStepStatus.OBSERVE,
-                        "waiting_recommendation_update")
-                same_panel = self._hash_distance(
-                    stable_frame.perceptual_hash,
-                    self.waiting_panel_hash) <= 4
-                if same_instruction and same_panel:
-                    return FlowStepResult(
-                        FlowStepStatus.OBSERVE,
-                        "waiting_recommendation_update")
                 self._clear_waiting()
             proposed = self.parser.parse(
                 evidence, state.game_num_turns_in_play, revision)
