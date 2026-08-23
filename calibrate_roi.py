@@ -170,6 +170,7 @@ USER32.UpdateLayeredWindow.restype = wintypes.BOOL
 
 # ---------------------------------------------------------------- 配色（BGR）
 GREEN = (80, 200, 80)          # 对齐成功：绿框
+SAVE_COLOR = (240, 140, 50)    # 保存成功：亮蓝反馈框
 ORANGE = (0, 140, 255)         # 尚未确认信标
 RED = (56, 56, 235)            # 错误
 PANEL_BG = (36, 40, 48)
@@ -239,6 +240,7 @@ class Calibrator:
         self.save_pending = False
         self.capture_pending = False
         self.saved_flash_until = 0.0
+        self._flash_active = False
         self._dirty = True
         self.last_crop = None
         self.crop_event = threading.Event()
@@ -339,7 +341,9 @@ class Calibrator:
             print(f"[校准] 保存失败：{exc}")
             return
         if flash:
-            self.saved_flash_until = time.time() + 4.0
+            self.saved_flash_until = time.time() + 1.5
+            self._flash_active = True
+        self._dirty = True
         print(f"[校准] 已保存推荐区域 -> {path}")
         print(f"[校准] recommendation_roi={tuple(self.roi)}（重开对局生效，"
               "不覆盖名字/日志目录等配置）")
@@ -404,7 +408,7 @@ class Calibrator:
     def _paint(self, sw: int, sh: int) -> np.ndarray:
         layer = np.zeros((sh, sw, 4), dtype=np.uint8)  # 内存序即 DIB BGRA
         l, t, r, b = self.roi
-        color = GREEN
+        color = SAVE_COLOR if time.time() < self.saved_flash_until else GREEN
         alpha = layer[:, :, 3]
         band = np.zeros((sh, sw), dtype=bool)
         # 四周边框，画在截图区域【外侧】，捕捉画面保持干净
@@ -603,6 +607,10 @@ class Calibrator:
                 if s_key and not self._shed:
                     self.save_roi(flash=True)
                 self._shed = s_key
+                if (self._flash_active
+                        and time.time() >= self.saved_flash_until):
+                    self._flash_active = False
+                    self._dirty = True
                 if self.running and self._dirty:
                     layer = self._paint(sw, sh)
                     ctypes.memmove(bits.value, layer.tobytes(), layer.nbytes)
