@@ -175,11 +175,12 @@ def _run() -> None:
     try:
         hwnd = _create_window()
         if hwnd:
-            # 强制定位到右下角并置顶（有些窗口样式会忽略 CreateWindow 初始坐标）
             sw = USER32.GetSystemMetrics(0)
             sh = USER32.GetSystemMetrics(1)
-            USER32.SetWindowPos(hwnd, -1, sw - PANEL_W - 12,
-                                sh - PANEL_H - 12, PANEL_W, PANEL_H, 0x0040)
+            x = sw - PANEL_W - 12
+            y = sh - PANEL_H - 12
+            print(f"[overlay] 定位: sw={sw} sh={sh} x={x} y={y}")
+            USER32.MoveWindow(hwnd, x, y, PANEL_W, PANEL_H, True)
         if not hwnd:
             print("[overlay] 日志浮窗创建失败(hwnd=0)")
             _STARTED[0] = False
@@ -242,10 +243,9 @@ USER32.UpdateLayeredWindow.argtypes = [wintypes.HWND, wintypes.HDC,
                                        wintypes.DWORD, ctypes.c_void_p,
                                        wintypes.DWORD]
 USER32.UpdateLayeredWindow.restype = wintypes.BOOL
-USER32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int,
-                                ctypes.c_int, ctypes.c_int, ctypes.c_int,
-                                wintypes.UINT]
-USER32.SetWindowPos.restype = wintypes.BOOL
+USER32.MoveWindow.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_int,
+                              ctypes.c_int, ctypes.c_int, wintypes.BOOL]
+USER32.MoveWindow.restype = wintypes.BOOL
 GDI32.CreateDIBSection.argtypes = [wintypes.HDC, ctypes.c_void_p, wintypes.UINT,
                                    ctypes.c_void_p, wintypes.HANDLE,
                                    wintypes.DWORD]
