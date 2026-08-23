@@ -112,7 +112,7 @@ class FullBoardMagneticTests(unittest.TestCase):
         self.assertEqual([
             ("position", (890, 1000)),
             ("press",),
-            ("position", (900, 600)),
+            ("position", (935, 600)),
             ("release",),
         ], mouse.events)
 

@@ -134,27 +134,7 @@ def _adapt_play_card(proposed, state):
                     proposed.target.owner, "minion",
                     target.collection_index, target_id)
         else:
-            # 随从/地标带目标（磁力、满场拖拽、需目标的随从）
-            if proposed.target.owner not in {"friendly", "enemy"}:
-                raise RecommendationStateError("targeted_action_unsupported")
-            if proposed.target.kind == "hero":
-                hero = (getattr(state, "my_hero", None)
-                        if proposed.target.owner == "friendly"
-                        else getattr(state, "oppo_hero", None))
-                if hero is None:
-                    raise RecommendationStateError("spell_target_missing")
-                target_id = getattr(hero, "entity_id", None)
-                manual_target = Target(
-                    proposed.target.owner, "hero", None, target_id)
-            else:
-                target = board_slot(
-                    state, proposed.target.owner, proposed.target.index)
-                if target.kind != "minion":
-                    raise RecommendationStateError("target_not_minion")
-                target_id = getattr(target.entity, "entity_id", None)
-                manual_target = Target(
-                    proposed.target.owner, "minion",
-                    target.collection_index, target_id)
+            raise RecommendationStateError("targeted_action_unsupported")
     manual = PlayCardAction(
         index, card.card_id, card.cardtype, gap_index=gap,
         target=manual_target,

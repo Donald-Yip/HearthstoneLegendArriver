@@ -250,7 +250,7 @@ def drag_card_to_board_entity(card_index, card_num, entity_index, entity_num):
     mouse.press(Button.left)
     try:
         board_x = 960 - (entity_num - 1) * 70 + entity_index * 140
-        mouse.position = (board_x - 60, 600)
+        mouse.position = (board_x - 25, 600)
         rand_sleep(0.1)
     finally:
         mouse.release(Button.left)
