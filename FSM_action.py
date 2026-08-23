@@ -78,16 +78,26 @@ def _automation_state_with_revision():
 
 
 def initialize_recommendation_automation():
-    """Rebuild per-game flows while reusing expensive OCR components."""
+    """Rebuild per-game flows while reusing expensive OCR components.
+
+    每次调用都会重新读取 ui_config.json 的 recommendation_roi（重建轻量的
+    RecommendationConfig + DesktopCapture），因此用校准工具画完框后，直接重开
+    对局/重启自动化即可生效，无需重启 web_ui。昂贵的 OCR 引擎（reader 与
+    paddle backend）仍只创建一次、跨对局复用。
+    """
     global auto_mulligan_flow, recommendation_flow
     global recommendation_config, recommendation_capture
     global recommendation_parser, recommendation_reader
     global mulligan_reader, recommendation_validator
 
-    if recommendation_config is None:
-        recommendation_config = RecommendationConfig()
-        recommendation_capture = DesktopCapture(recommendation_config)
+    # 轻量：每次都重建，以便拾取校准后的最新 ROI / 尺寸配置。
+    recommendation_config = RecommendationConfig()
+    recommendation_capture = DesktopCapture(recommendation_config)
+
+    if recommendation_parser is None:
         recommendation_parser = RecommendationParser()
+
+    if recommendation_reader is None:
         recommendation_reader = StableRecommendationReader(
             recommendation_config, PaddleOcrAdapter(),
             text_normalizer=recommendation_parser.normalize_action_text)
