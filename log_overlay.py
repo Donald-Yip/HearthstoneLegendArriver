@@ -66,9 +66,14 @@ def _run() -> None:
         title = tk.Label(root, text="自动化日志", bg=BG, fg="#e0e0e0",
                          font=("Microsoft YaHei", 10, "bold"))
         title.pack(fill="x")
-        text = tk.Text(root, bg=BG, fg="white", font=("Microsoft YaHei", 10),
+        body = tk.Frame(root, bg=BG)
+        body.pack(fill="both", expand=True)
+        text = tk.Text(body, bg=BG, fg="white", font=("Microsoft YaHei", 10),
                        bd=0, highlightthickness=0, wrap="none")
-        text.pack(fill="both", expand=True)
+        text.pack(side="left", fill="both", expand=True)
+        scroll = tk.Scrollbar(body, orient="vertical", command=text.yview)
+        scroll.pack(side="right", fill="y")
+        text.config(yscrollcommand=scroll.set)
         text.tag_config("turn", foreground=GREEN)
         text.tag_config("act", foreground=ACT)
         text.tag_config("dim", foreground=DIM)
@@ -90,12 +95,13 @@ def _run() -> None:
         def _update():
             with _LOCK:
                 lines = list(_LINES)[-40:]
+            pos = text.yview()
             text.delete("1.0", "end")
             for ln, turn in lines:
                 tag = "turn" if turn else (
                     "act" if ln.startswith(("[推荐]", "[执行]")) else "dim")
                 text.insert("end", ln + "\n", tag)
-            text.see("end")
+            text.yview_moveto(pos[0])
             root.after(_REFRESH_MS, _update)
 
         _update()
