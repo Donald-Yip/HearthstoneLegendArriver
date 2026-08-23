@@ -42,13 +42,17 @@ _STOP = threading.Event()
 
 
 _ON_START = None
+_ON_HALT = None
+_IS_RUNNING = None
 
 
-def start(on_start=None) -> None:
-    global _ON_START
+def start(on_start=None, on_halt=None, is_running=None) -> None:
+    global _ON_START, _ON_HALT, _IS_RUNNING
     if _STARTED[0]:
         return
     _ON_START = on_start
+    _ON_HALT = on_halt
+    _IS_RUNNING = is_running
     _STOP.clear()
     _STARTED[0] = True
     threading.Thread(target=_run, name="hs-log-overlay", daemon=True).start()
@@ -93,6 +97,15 @@ def _run() -> None:
                               font=("Microsoft YaHei", 10, "bold"),
                               command=_call_start)
         start_btn.pack(fill="x")
+
+        def _call_halt():
+            if _ON_HALT is not None:
+                _ON_HALT()
+
+        halt_btn = tk.Button(root, text="⏹ 中止", bg="#c0392b", fg="white",
+                             font=("Microsoft YaHei", 10, "bold"),
+                             command=_call_halt)
+        halt_btn.pack(fill="x")
         body = tk.Frame(root, bg=BG)
         body.pack(fill="both", expand=True)
         text = tk.Text(body, bg=BG, fg="white", font=("Microsoft YaHei", 10),
@@ -132,6 +145,8 @@ def _run() -> None:
                 tag = "turn" if turn else (
                     "act" if ln.startswith(("[推荐]", "[执行]")) else "dim")
                 text.insert("end", ln + "\n", tag)
+            if _IS_RUNNING is not None:
+                halt_btn.config(text=("⏹ 中止" if _IS_RUNNING() else "▶ 恢复"))
             text.yview_moveto(pos[0])
             root.after(_REFRESH_MS, _update)
 
