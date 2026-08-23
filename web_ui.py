@@ -97,6 +97,9 @@ def _log(level: str, msg: str):
             "level": level,
             "msg": str(msg),
         })
+    # 统一推入日志浮窗（关键行），与自动化日志同通道、按时间先后
+    if log_overlay is not None and _overlay_key(str(msg)):
+        log_overlay.push(str(msg), level)
     # 同时落盘：程序关闭/异常退出后仍可离线查看（诊断不依赖人工复制）。
     try:
         path = ROOT / "ui_log_last.txt"
@@ -111,7 +114,8 @@ def _log(level: str, msg: str):
 
 
 def _overlay_key(line: str) -> bool:
-    keys = ("回合", "延时", "轮到己方", "等待", "[推荐]", "[执行]", "识别换牌")
+    keys = ("回合", "延时", "轮到己方", "等待", "[推荐]", "[执行]",
+            "识别换牌", "阶段", "对局结束", "未对局")
     return ("[OCR]" not in line) and any(k in line for k in keys)
 
 
@@ -145,10 +149,7 @@ class _TeeStream:
                     break
             for line in text.splitlines():
                 if line.strip():
-                    s = line.rstrip()
-                    _log(level, s)
-                    if log_overlay is not None and _overlay_key(s):
-                        log_overlay.push(s, level)
+                    _log(level, line.rstrip())
 
     def flush(self):
         try:
@@ -558,6 +559,59 @@ def api_calibrate():
     return {"ok": True, "message": "校准工具已启动（无预览：拖绿框对齐盒子面板后按 S 保存，Esc 退出）"}
 
 
+def _stage_label(ls):
+    if getattr(ls, "game_entity_id", 0) == 0:
+        return "未对局"
+    if getattr(ls, "is_end", False):
+        return "对局结束"
+    try:
+        turns = ls.game_num_turns_in_play
+    except Exception:
+        turns = 0
+    if turns == 0:
+        return "换牌"
+    if ls.is_my_turn:
+        return "我方出牌"
+    return "对手回合"
+
+
+def _stage_monitor_loop():
+    """常驻阶段监测：独立读 Power.log，阶段变化打 -----xx阶段-----。"""
+    try:
+        from log_state import LogState, log_iter_func, update_state
+    except Exception as exc:
+        _log("WARN", f"阶段监测初始化失败：{exc}")
+        return
+    cfg = load_config()
+    log_root = (cfg.get("log_root") or "").strip()
+    if not log_root:
+        return
+    ls = LogState()
+    try:
+        li = log_iter_func(log_root)
+    except Exception as exc:
+        _log("WARN", f"阶段监测日志读取失败：{exc}")
+        return
+    last = None
+    while True:
+        try:
+            c = next(li)
+            if getattr(c, "log_type", "ERROR") == "ERROR":
+                continue
+            for line in c.message_list:
+                try:
+                    update_state(ls, line)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        stage = _stage_label(ls)
+        if stage != last:
+            last = stage
+            _log("SYS", f"-----{stage}阶段-----")
+        time.sleep(0.3)
+
+
 def _overlay_is_running():
     with CTRL.lock:
         return CTRL.automation_thread is not None
@@ -784,6 +838,9 @@ def _boot_resume_schedule():
 
 def main():
     os.chdir(ROOT)
+    # 常驻阶段监测线程：停止自动化也继续检测当前阶段（随时可恢复）
+    threading.Thread(target=_stage_monitor_loop, name="hs-stage",
+                     daemon=True).start()
     cfg = load_config()
     _apply_constants(cfg.get("name") or "", cfg.get("log_root") or "")
     _boot_resume_schedule()
