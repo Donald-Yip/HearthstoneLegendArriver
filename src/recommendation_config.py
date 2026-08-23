@@ -55,7 +55,7 @@ class RecommendationConfig:
     # ------------------------------------------------------------------ 出牌
     # 每个新回合开始延时一次（给盒子更新推荐留时间），
     # 同回合内多次出牌操作之间不重复延时。
-    pre_action_delay_seconds: float = 4.0
+    pre_action_delay_seconds: float = 7.0
     # 一次操作执行完成之后到下轮截图+OCR 的延时（0 = 立即开始）；
     # 配合上面"回合只延时一次"使用。
     post_action_delay_seconds: float = 0.0
