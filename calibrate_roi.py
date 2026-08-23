@@ -239,6 +239,7 @@ class Calibrator:
         self.save_pending = False
         self.capture_pending = False
         self.saved_flash_until = 0.0
+        self._dirty = True
         self.last_crop = None
         self.crop_event = threading.Event()
         self.ocr_result = {"status": "loading", "lines": [], "beacon": None,
@@ -319,6 +320,7 @@ class Calibrator:
             r = min(sw, max(l + MIN_SIZE, sx))
             b = min(sh, max(t + MIN_SIZE, sy))
         self.roi = [l, t, r, b]
+        self._dirty = True
 
     # ------------------------------------------------------------ 保存
     def save_roi(self, flash: bool = False):
@@ -601,13 +603,14 @@ class Calibrator:
                 if s_key and not self._shed:
                     self.save_roi(flash=True)
                 self._shed = s_key
-                if self.running:
+                if self.running and self._dirty:
                     layer = self._paint(sw, sh)
                     ctypes.memmove(bits.value, layer.tobytes(), layer.nbytes)
                     USER32.UpdateLayeredWindow(
                         self.hwnd, None, ctypes.byref(pt_dst),
                         ctypes.byref(size), mem_dc, ctypes.byref(pt_src), 0,
                         ctypes.byref(blend), ULW_ALPHA)
+                    self._dirty = False
                 if deadline is not None and time.time() > deadline:
                     break
                 time.sleep(0.1)
