@@ -75,6 +75,13 @@ class _BITMAPINFO(ctypes.Structure):
                 ("bmiColors", wintypes.DWORD * 3)]
 
 
+class _MSG(ctypes.Structure):
+    _fields_ = [("hwnd", wintypes.HWND), ("message", wintypes.UINT),
+                ("wParam", wintypes.WPARAM), ("lParam", wintypes.LPARAM),
+                ("time", wintypes.DWORD), ("pt_x", wintypes.LONG),
+                ("pt_y", wintypes.LONG)]
+
+
 _LOCK = threading.Lock()
 _LINES: deque = deque(maxlen=MAX_LINES)
 _STARTED = [False]
@@ -181,10 +188,6 @@ def _run() -> None:
             y = sh - PANEL_H - 12
             print(f"[overlay] 定位: sw={sw} sh={sh} x={x} y={y}")
             USER32.MoveWindow(hwnd, x, y, PANEL_W, PANEL_H, True)
-            _rect = wintypes.RECT()
-            USER32.GetWindowRect(hwnd, ctypes.byref(_rect))
-            print(f"[overlay] rect: L={_rect.left} T={_rect.top} "
-                  f"R={_rect.right} B={_rect.bottom}")
         if not hwnd:
             print("[overlay] 日志浮窗创建失败(hwnd=0)")
             _STARTED[0] = False
@@ -207,7 +210,12 @@ def _run() -> None:
         pt_dst = wintypes.POINT(0, 0)
         size = wintypes.SIZE(PANEL_W, PANEL_H)
         pt_src = wintypes.POINT(0, 0)
+        msg = _MSG()
         while True:
+            # 消息泵：窗口需要处理移动等消息，MoveWindow 位置才真正生效
+            while USER32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):
+                USER32.TranslateMessage(ctypes.byref(msg))
+                USER32.DispatchMessageW(ctypes.byref(msg))
             layer = _render()
             if layer is not None and bits.value:
                 ctypes.memmove(bits.value, layer.tobytes(), layer.nbytes)
@@ -252,6 +260,11 @@ USER32.MoveWindow.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_int,
 USER32.MoveWindow.restype = wintypes.BOOL
 USER32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
 USER32.GetWindowRect.restype = wintypes.BOOL
+USER32.PeekMessageW.argtypes = [ctypes.c_void_p, wintypes.HWND, wintypes.UINT,
+                                wintypes.UINT, wintypes.UINT]
+USER32.PeekMessageW.restype = wintypes.BOOL
+USER32.TranslateMessage.argtypes = [ctypes.c_void_p]
+USER32.DispatchMessageW.argtypes = [ctypes.c_void_p]
 GDI32.CreateDIBSection.argtypes = [wintypes.HDC, ctypes.c_void_p, wintypes.UINT,
                                    ctypes.c_void_p, wintypes.HANDLE,
                                    wintypes.DWORD]
