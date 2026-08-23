@@ -181,6 +181,10 @@ def _run() -> None:
             y = sh - PANEL_H - 12
             print(f"[overlay] 定位: sw={sw} sh={sh} x={x} y={y}")
             USER32.MoveWindow(hwnd, x, y, PANEL_W, PANEL_H, True)
+            _rect = wintypes.RECT()
+            USER32.GetWindowRect(hwnd, ctypes.byref(_rect))
+            print(f"[overlay] rect: L={_rect.left} T={_rect.top} "
+                  f"R={_rect.right} B={_rect.bottom}")
         if not hwnd:
             print("[overlay] 日志浮窗创建失败(hwnd=0)")
             _STARTED[0] = False
@@ -246,6 +250,8 @@ USER32.UpdateLayeredWindow.restype = wintypes.BOOL
 USER32.MoveWindow.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_int,
                               ctypes.c_int, ctypes.c_int, wintypes.BOOL]
 USER32.MoveWindow.restype = wintypes.BOOL
+USER32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+USER32.GetWindowRect.restype = wintypes.BOOL
 GDI32.CreateDIBSection.argtypes = [wintypes.HDC, ctypes.c_void_p, wintypes.UINT,
                                    ctypes.c_void_p, wintypes.HANDLE,
                                    wintypes.DWORD]
