@@ -133,7 +133,8 @@ def initialize_recommendation_automation():
         click, read_mulligan_action, _automation_state,
         action_context=click.hearthstone_action_session,
         stopped=shutdown_event.is_set,
-        pre_action_delay=recommendation_config.mulligan_post_ocr_delay_seconds)
+        first_delay=recommendation_config.mulligan_ready_delay_seconds,
+        retry_delay=recommendation_config.mulligan_post_ocr_delay_seconds)
     recommendation_flow = RecommendationFlow(
         capture=recommendation_capture,
         reader=recommendation_reader,
@@ -405,6 +406,7 @@ def ChoosingCardAction():
             return FSM_BATTLING
 
     if auto_mulligan_flow is not None:
+        auto_mulligan_flow.reset_delay()  # 每局首次用 ready(7)，重试用 post_ocr(5)
         # 换牌操作不断重复执行，直至回合开始：
         # - 识别/执行失败 → 立即重试（原重试机制不变）
         # - 点击完成但手牌未变（点击未生效）→ 重新尝试
