@@ -11,6 +11,8 @@ import time
 from src.recommendation_config import RecommendationConfig
 from src.recommendation_models import OcrEvidence, OcrLine
 
+from config import OCR_MODEL_ROOT
+
 
 class OcrUnavailableError(RuntimeError):
     pass
@@ -79,8 +81,7 @@ class PaddleOcrAdapter:
             run_dir.mkdir(parents=True, exist_ok=True)
             self._frame_dir = run_dir
             print(f"[OCR] 本会话自动保存截图: {run_dir}")
-        default_root = (Path(os.environ.get("LOCALAPPDATA", Path.home()))
-                        / "AutoHS" / "ocr_models" / "paddleocr")
+        default_root = Path(OCR_MODEL_ROOT)
         self.model_root = Path(model_root or default_root).resolve()
 
     def load(self):

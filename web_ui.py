@@ -34,9 +34,8 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
 CONFIG_PATH = ROOT / "ui_config.json"
-HOST = "127.0.0.1"
-BASE_PORT = 8765
-LOG_BUFFER_SIZE = 500
+# 站点/端口/日志缓冲来自 config.py（可通过环境变量覆盖，见 HS_HOST/HS_PORT/HS_LOG_BUFFER_SIZE）。
+from config import HOST, BASE_PORT, LOG_BUFFER_SIZE
 
 
 # ---------------------------------------------------------------- 管理员检测

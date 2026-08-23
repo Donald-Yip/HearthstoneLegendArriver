@@ -1,26 +1,13 @@
-# 炉石日志根目录。脚本会自动选择最新的
-# Hearthstone_YYYY_MM_DD_HH_MM_SS/Power.log。
-# 自动探测候选（按顺序取第一个存在的）：
-#   1. 环境变量 HS_LOG_ROOT（高级用户）
-#   2. D:/Game/BattleNet/Hearthstone/Logs（国服/安装到 D 盘的常见位置）
-#   3. %LOCALAPPDATA%/Blizzard/Hearthstone/Logs（默认安装位置）
-import os
-
-_HEARTHSTONE_LOG_CANDIDATES = [
-    os.environ.get("HS_LOG_ROOT", ""),
-    "D:/Game/BattleNet/Hearthstone/Logs",
-    os.path.join(
-        os.environ.get("LOCALAPPDATA", ""), "Blizzard", "Hearthstone", "Logs"),
-]
-HEARTHSTONE_LOG_ROOT = "D:/Hearthstone/Logs"
-for _candidate in _HEARTHSTONE_LOG_CANDIDATES:
-    if _candidate and os.path.isdir(_candidate):
-        HEARTHSTONE_LOG_ROOT = _candidate
-        break
+# 用户身份与炉石日志目录已迁移到 config.py（分层：内置默认 < ui_config.json < 环境变量）。
+# 这里是唯一的转发点，避免在多处硬编码机器路径/用户身份。
+from config import (
+    HEARTHSTONE_LOG_ROOT, USER_NAME,
+    OPERATE_INTERVAL, STATE_CHECK_INTERVAL, TINY_OPERATE_INTERVAL,
+)
 
 # 你的炉石用户名, 注意英文标点符号'#', 把后面的数字也带上
 # 可以输入中文
-YOUR_NAME = "YOURNAME#1234"
+YOUR_NAME = USER_NAME
 
 # 关于控制台信息打印的设置
 DEBUG_PRINT = True
@@ -35,10 +22,6 @@ WARN_FILE_WRITE = True
 SYS_FILE_WRITE = True
 INFO_FILE_WRITE = True
 ERROR_FILE_WRITE = True
-
-OPERATE_INTERVAL = 0.15
-STATE_CHECK_INTERVAL = 1
-TINY_OPERATE_INTERVAL = 0.08
 
 # 我觉得这行注释之后的内容应该不需要修改……
 FSM_LEAVE_HS = "Leave Hearth Stone"
