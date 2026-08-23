@@ -17,6 +17,10 @@
 from __future__ import annotations
 
 import ctypes
+try:
+    import log_overlay
+except Exception:
+    log_overlay = None
 import json
 import os
 import subprocess
@@ -105,6 +109,11 @@ def _log(level: str, msg: str):
         pass
 
 
+def _overlay_key(line: str) -> bool:
+    keys = ("回合", "延时", "轮到己方", "等待", "[推荐]", "[执行]", "识别换牌")
+    return ("[OCR]" not in line) and any(k in line for k in keys)
+
+
 def take_logs_after(seq: int):
     with _log_lock:
         lines = [e for e in _log_buffer if e["seq"] > seq]
@@ -135,7 +144,10 @@ class _TeeStream:
                     break
             for line in text.splitlines():
                 if line.strip():
-                    _log(level, line.rstrip())
+                    s = line.rstrip()
+                    _log(level, s)
+                    if log_overlay is not None and _overlay_key(s):
+                        log_overlay.push(s, level)
 
     def flush(self):
         try:
@@ -261,6 +273,8 @@ def _start_automation():
 
 def _automation_worker(fsm):
     summary = {"games": 0, "wins": 0}
+    if log_overlay is not None:
+        log_overlay.start()
     # 自动化在后台线程运行；get_screen 等模块使用 win32com / win32ui（COM），
     # COM 要求线程级初始化，否则报“尚未调用 CoInitialize”并导致线程崩溃。
     com_ready = False
