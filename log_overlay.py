@@ -14,13 +14,15 @@ Every button hands the foreground back to Hearthstone afterwards.
 """
 from __future__ import annotations
 
+import datetime
+import os
 import re
 import threading
 import time
 from collections import deque
 
 _LOCK = threading.Lock()
-_LINES: deque = deque(maxlen=64)
+_LINES: deque = deque(maxlen=2000)
 _STARTED = [False]
 _REFRESH_MS = 350
 
@@ -88,10 +90,29 @@ def push(line: str, _level: str = "INFO") -> None:
     line = str(line).rstrip()
     if not line.strip():
         return
+    is_turn_start = "轮到己方" in line
     with _LOCK:
         if _update_delay_from_line(line):
             return  # 延时行只驱动进度条，不进正文日志
         _LINES.append((line, _turn_start(line)))
+    if is_turn_start:
+        # 我方回合开始：把炉石唤回前台，避免 OCR 被其他窗口挡住。
+        _raise_hearthstone()
+
+
+def _save_log() -> str:
+    """把当前对战日志写入磁盘，返回保存路径。"""
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    root = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(root, f"对战日志_{ts}.txt")
+    with _LOCK:
+        lines = [ln for ln, _ in list(_LINES)]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"# 对战日志 {datetime.datetime.now():%Y-%m-%d %H:%M:%S}\n")
+        f.write("\n".join(lines))
+        if lines:
+            f.write("\n")
+    return path
 
 
 _STOP = threading.Event()
@@ -284,6 +305,18 @@ def _run() -> None:
                                    _call_stop_after)
         stop_after_btn.pack(fill="x", pady=3)
 
+        def _call_save():
+            try:
+                path = _save_log()
+                push(f"[SYS] 对战日志已保存：{path}")
+            except Exception as exc:
+                push(f"[SYS] 保存对战日志失败：{exc}")
+            finally:
+                _raise_hearthstone()
+
+        save_btn = _make_btn(btn_frame, "💾  保存日志", OK, _call_save)
+        save_btn.pack(fill="x", pady=3)
+
         # ---- delay progress (bottom; 先占底部，日志区填剩余空间) ------
         delay_frame = tk.Frame(root, bg=BG)
         delay_frame.pack(side="bottom", fill="x", padx=8, pady=(0, 8))
@@ -298,7 +331,7 @@ def _run() -> None:
         body = tk.Frame(root, bg=BG)
         body.pack(fill="both", expand=True, padx=8, pady=(6, 8))
         text = tk.Text(body, bg=BG, fg=TEXT, font=("Microsoft YaHei", 9),
-                       bd=0, highlightthickness=0, wrap="none",
+                       bd=0, highlightthickness=0, wrap="word",
                        height=12, padx=2, pady=2, spacing1=2, spacing3=2)
         text.pack(side="left", fill="both", expand=True)
         scroll = tk.Scrollbar(body, orient="vertical", command=text.yview,
@@ -329,7 +362,7 @@ def _run() -> None:
                 _STARTED[0] = False
                 return
             with _LOCK:
-                lines = list(_LINES)[-40:]
+                lines = list(_LINES)
             pos = text.yview()
             text.delete("1.0", "end")
             for ln, turn in lines:
