@@ -410,6 +410,8 @@ def ChoosingCardAction():
         waiting_generation = log_state.game_generation
         delay = (recommendation_config.mulligan_ready_delay_seconds
                  if auto_mulligan_flow is not None else 2)
+        manual_controller.output(
+            f"[SYS] 换牌阶段：延时 {delay:.0f}s 后开始识别留牌……")
         time.sleep(delay)
         mulligan_delay_generation = waiting_generation
         snapshot = refresh_snapshot()

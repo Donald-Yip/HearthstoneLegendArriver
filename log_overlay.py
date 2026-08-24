@@ -14,7 +14,9 @@ Every button hands the foreground back to Hearthstone afterwards.
 """
 from __future__ import annotations
 
+import re
 import threading
+import time
 from collections import deque
 
 _LOCK = threading.Lock()
@@ -40,6 +42,29 @@ def _turn_start(line: str) -> bool:
     return ("回合" in line and "延时" in line) or ("轮到己方" in line)
 
 
+_DELAY = None
+_delay_start_re = re.compile(r"(?:延时|等待)\s*(\d+(?:\.\d+)?)\s*s?\s*后")
+_delay_end_markers = ("延时结束", "延时完毕")
+
+
+def _update_delay_from_line(line: str) -> None:
+    """从日志行识别延时起点/终点，驱动浮窗底部延时进度条。"""
+    global _DELAY
+    start = _delay_start_re.search(line)
+    if start:
+        total = float(start.group(1))
+        if "换牌" in line:
+            label = "换牌延时"
+        elif "回合" in line:
+            label = "回合延时"
+        else:
+            label = "延时"
+        _DELAY = {"label": label, "total": total, "started": time.time()}
+        return
+    if any(marker in line for marker in _delay_end_markers):
+        _DELAY = None
+
+
 def push(line: str, _level: str = "INFO") -> None:
     if not _STARTED[0]:
         return
@@ -48,6 +73,7 @@ def push(line: str, _level: str = "INFO") -> None:
         return
     with _LOCK:
         _LINES.append((line, _turn_start(line)))
+        _update_delay_from_line(line)
 
 
 _STOP = threading.Event()
@@ -255,6 +281,16 @@ def _run() -> None:
         text.tag_config("act", foreground=TEXT)
         text.tag_config("dim", foreground=DIM)
 
+        # ---- delay progress --------------------------------------------
+        delay_frame = tk.Frame(root, bg=BG)
+        delay_frame.pack(fill="x", padx=8, pady=(0, 8))
+        delay_label = tk.Label(delay_frame, text="延时：无", bg=BG, fg=DIM,
+                               font=("Microsoft YaHei", 8), anchor="w")
+        delay_label.pack(fill="x")
+        delay_canvas = tk.Canvas(delay_frame, height=8, bg=PANEL,
+                                 highlightthickness=0)
+        delay_canvas.pack(fill="x", pady=(2, 0))
+
         # ---- drag ------------------------------------------------------
         _drag = {"x": 0, "y": 0}
 
@@ -298,6 +334,24 @@ def _run() -> None:
                                  bg=ACCENT, activebackground=ACCENT,
                                  disabledforeground=DIM,
                                  cursor="hand2")
+            with _LOCK:
+                delay = dict(_DELAY) if _DELAY is not None else None
+            if delay is not None:
+                now = time.time()
+                elapsed = now - delay["started"]
+                total = max(delay["total"], 0.001)
+                frac = min(max(elapsed / total, 0.0), 1.0)
+                remaining = max(total - elapsed, 0.0)
+                delay_label.config(
+                    text=f"⏳ {delay['label']}：{remaining:.0f}/{total:.0f}s",
+                    fg=TEXT)
+                w = max(delay_canvas.winfo_width(), 1)
+                delay_canvas.delete("all")
+                delay_canvas.create_rectangle(
+                    0, 0, w * frac, 8, fill=ACCENT, outline="")
+            else:
+                delay_label.config(text="延时：无", fg=DIM)
+                delay_canvas.delete("all")
             _set_stop_after_state()
             text.yview_moveto(pos[0])
             root.after(_REFRESH_MS, _update)
