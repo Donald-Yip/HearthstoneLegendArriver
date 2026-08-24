@@ -383,13 +383,6 @@ def MatchingAction():
             return FSM_ERROR
 
 
-def _mulligan_hand_identity(snapshot):
-    """换牌期手牌指纹：换牌点击生效后（手牌变化）指纹改变。"""
-    return tuple(
-        (getattr(card, "card_id", None), getattr(card, "entity_id", None))
-        for card in getattr(snapshot, "my_hand_cards", ()))
-
-
 def ChoosingCardAction():
     global choose_hero_count, mulligan_delay_generation
     global quitting_flag, stop_after_current_game, shutdown_event
@@ -424,13 +417,12 @@ def ChoosingCardAction():
 
     if auto_mulligan_flow is not None:
         auto_mulligan_flow.reset_delay()  # 每局首次用 ready(7)，重试用 post_ocr(5)
-        # 换牌操作不断重复执行，直至回合开始：
+        # 换牌自动流：
         # - 识别/执行失败 → 立即重试（原重试机制不变）
-        # - 点击完成但手牌未变（点击未生效）→ 重新尝试
-        # - 确认生效后 → 快速轮询直到对局进入战斗回合
-        initial_hand = _mulligan_hand_identity(snapshot)
+        # - 成功后不再重复执行，只快速轮询到对局进入战斗回合。
+        #   旧逻辑拿“点击后的手牌”当基准对比，Power.log 更新快时会误判
+        #   “点击未生效”并重复跑换牌流，实际换牌已成功（表现：一直提示失败）。
         confirmed_waiting = False
-        confirmed_hand = None
         while True:
             # 循环内必须检查停止标志：主循环只在状态分发处检查，
             # 本循环若能无限运行，立即停止后鼠标会继续点击。
@@ -446,21 +438,14 @@ def ChoosingCardAction():
             if fresh.game_num_turns_in_play > 0:
                 return FSM_BATTLING
             if confirmed_waiting:
-                cur_hand = _mulligan_hand_identity(fresh)
-                if cur_hand != confirmed_hand:
-                    # 换牌已生效，等待对局开始
-                    time.sleep(0.3)
-                    continue
-                manual_controller.output(
-                    "换牌点击未生效（手牌未变），重新尝试……")
-                confirmed_waiting = False
+                # 已提交：等待对局开始（换牌窗口已过，不再重复执行）。
+                time.sleep(0.3)
+                continue
             result = auto_mulligan_flow.run()
             if result.status == MulliganStatus.CONFIRMED:
                 confirmed_waiting = True
-                confirmed_hand = _mulligan_hand_identity(
-                    refresh_snapshot() or fresh)
                 _report_mulligan_diagnostic(
-                    "confirmed", "已执行换牌，等待确认……")
+                    "confirmed", "已执行换牌，等待对手……")
                 time.sleep(0.3)
                 continue
             message = f"换牌推荐暂不可执行，继续重试：{result.diagnostics}"
