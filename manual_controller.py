@@ -1,7 +1,6 @@
 """Command-line control for mulligan and player-turn actions."""
 
 from dataclasses import dataclass, replace
-import sys
 import threading
 import time
 from typing import Callable, Optional, Union
@@ -74,48 +73,6 @@ class GlobalHotkeyInput:
                     self.keyboard.remove_hotkey(handle)
                 except Exception:
                     pass
-
-
-def cancellable_console_input(
-    prompt: str,
-    stop_event: threading.Event,
-    key_available=None,
-    read_key=None,
-    sleep_func=time.sleep,
-    write_func=None,
-) -> str:
-    """Read a Windows console line while allowing Ctrl+Q to cancel it."""
-    if key_available is None or read_key is None:
-        import msvcrt
-        key_available = msvcrt.kbhit
-        read_key = msvcrt.getwch
-    if write_func is None:
-        write_func = lambda text: (sys.stdout.write(text), sys.stdout.flush())
-
-    write_func(prompt)
-    chars = []
-    while not stop_event.is_set():
-        if not key_available():
-            sleep_func(0.05)
-            continue
-        char = read_key()
-        if char in ("\r", "\n"):
-            write_func("\n")
-            return "".join(chars)
-        if char == "\003":
-            raise KeyboardInterrupt
-        if char == "\b":
-            if chars:
-                chars.pop()
-                write_func("\b \b")
-            continue
-        if char in ("\x00", "\xe0"):
-            read_key()
-            continue
-        if char.isprintable():
-            chars.append(char)
-            write_func(char)
-    raise KeyboardInterrupt
 
 
 @dataclass(frozen=True)
