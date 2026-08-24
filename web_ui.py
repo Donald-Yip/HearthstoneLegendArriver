@@ -564,7 +564,8 @@ def _hearthstone_foreground_guard():
 
     每 30 分钟检查一次当前前台窗口；若不是炉石主窗口，就用
     get_screen.move_window_foreground（同「开始对战」脚本开头的一致）
-    把炉石切回最前台。首次启动即校正一次，之后按间隔周期检查。
+    把炉石切回最前台。只在启动 30 分钟后才做第一次校正，避免
+    一打开 web 控制台就把炉石抢到前台（用户只想打开 web）。
     """
     interval = 30 * 60
     try:
@@ -578,11 +579,8 @@ def _hearthstone_foreground_guard():
     except Exception as exc:
         _log("WARN", f"炉石前台守护不可用：{exc}")
         return
-    first = True
     while True:
-        if not first:
-            time.sleep(interval)
-        first = False
+        time.sleep(interval)
         try:
             hwnd = get_screen.get_HS_hwnd()
             if not hwnd:
