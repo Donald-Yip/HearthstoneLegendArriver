@@ -291,7 +291,6 @@ def _run() -> None:
             if _IS_IN_GAME is not None and _IS_IN_GAME():
                 start_btn.config(state="disabled", text="⏳  对局进行中",
                                  bg=DISABLED, activebackground=DISABLED,
-                                 disabledbackground=DISABLED,
                                  disabledforeground=DIM,
                                  cursor="arrow")
             else:
