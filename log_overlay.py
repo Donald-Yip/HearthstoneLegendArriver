@@ -47,8 +47,19 @@ _delay_start_re = re.compile(r"(?:延时|等待)\s*(\d+(?:\.\d+)?)\s*s?\s*后")
 _delay_end_markers = ("延时结束", "延时完毕")
 
 
-def _update_delay_from_line(line: str) -> None:
-    """从日志行识别延时起点/终点，驱动浮窗底部延时进度条。"""
+def _delay_desc(line: str) -> str:
+    """从延时日志行里提炼一句人类可读的说明（供进度条下方显示）。"""
+    text = _delay_start_re.sub("", line)
+    text = text.replace("[SYS]", "").replace("……", "").replace("…", "")
+    text = text.replace(".", "").strip().strip("：:，, ")
+    return text or "延时"
+
+
+def _update_delay_from_line(line: str) -> bool:
+    """从日志行识别延时起点/终点，驱动浮窗底部延时进度条。
+
+    返回 True 表示本行是延时信息（已被进度条消费，不再进正文日志）。
+    """
     global _DELAY
     start = _delay_start_re.search(line)
     if start:
@@ -59,10 +70,16 @@ def _update_delay_from_line(line: str) -> None:
             label = "回合延时"
         else:
             label = "延时"
-        _DELAY = {"label": label, "total": total, "started": time.time()}
-        return
+        desc = _delay_desc(line)
+        _DELAY = {
+            "label": label, "desc": desc,
+            "total": total, "started": time.time(),
+        }
+        return True
     if any(marker in line for marker in _delay_end_markers):
         _DELAY = None
+        return True
+    return False
 
 
 def push(line: str, _level: str = "INFO") -> None:
@@ -72,8 +89,9 @@ def push(line: str, _level: str = "INFO") -> None:
     if not line.strip():
         return
     with _LOCK:
+        if _update_delay_from_line(line):
+            return  # 延时行只驱动进度条，不进正文日志
         _LINES.append((line, _turn_start(line)))
-        _update_delay_from_line(line)
 
 
 _STOP = threading.Event()
@@ -269,12 +287,12 @@ def _run() -> None:
         # ---- delay progress (bottom; 先占底部，日志区填剩余空间) ------
         delay_frame = tk.Frame(root, bg=BG)
         delay_frame.pack(side="bottom", fill="x", padx=8, pady=(0, 8))
+        delay_canvas = tk.Canvas(delay_frame, height=8, bg=PANEL,
+                                 highlightthickness=0)
+        delay_canvas.pack(fill="x", pady=(0, 2))
         delay_label = tk.Label(delay_frame, text="延时：无", bg=BG, fg=DIM,
                                font=("Microsoft YaHei", 8), anchor="w")
         delay_label.pack(fill="x")
-        delay_canvas = tk.Canvas(delay_frame, height=8, bg=PANEL,
-                                 highlightthickness=0)
-        delay_canvas.pack(fill="x", pady=(2, 0))
 
         # ---- log body --------------------------------------------------
         body = tk.Frame(root, bg=BG)
@@ -343,7 +361,7 @@ def _run() -> None:
                 frac = min(max(elapsed / total, 0.0), 1.0)
                 remaining = max(total - elapsed, 0.0)
                 delay_label.config(
-                    text=f"⏳ {delay['label']}：{remaining:.0f}/{total:.0f}s",
+                    text=f"⏳ {delay['desc']}（{remaining:.0f}/{total:.0f}s）",
                     fg=TEXT)
                 w = max(delay_canvas.winfo_width(), 1)
                 delay_canvas.delete("all")

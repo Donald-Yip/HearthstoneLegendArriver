@@ -115,8 +115,8 @@ def _log(level: str, msg: str):
 
 def _overlay_key(line: str) -> bool:
     keys = ("回合", "延时", "轮到己方", "等待", "[推荐]", "[执行]",
-            "识别换牌", "换牌", "阶段", "对局结束", "未对局", "本局结束",
-            "立即停止")
+            "识别换牌", "换牌", "留牌", "阶段", "对局结束", "未对局",
+            "本局结束", "失败", "立即停止")
     return ("[OCR]" not in line) and any(k in line for k in keys)
 
 
