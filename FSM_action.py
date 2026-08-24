@@ -275,10 +275,22 @@ def request_stop_after_game():
 
     对局进行中时不会中断当前操作；当状态机回到非对局状态
     （主菜单/选职业/匹配/炉石未运行等）后自动化线程自动退出。
+    再次调用 request_cancel_stop_after_game() 可在本局结束前撤销。
     """
     global stop_after_current_game
     stop_after_current_game = True
     info_print("已请求：本局对战结束后停止自动化。")
+    return True
+
+
+def request_cancel_stop_after_game():
+    """撤销“本局结束后停止”，让自动化继续打下去。
+
+    在线程退出前调用即可，无需重启脚本；本局结束前都可自由更改。
+    """
+    global stop_after_current_game
+    stop_after_current_game = False
+    info_print("已取消「本局结束后停止」，自动化继续运行。")
     return True
 
 
@@ -416,13 +428,10 @@ def ChoosingCardAction():
         confirmed_hand = None
         while True:
             # 循环内必须检查停止标志：主循环只在状态分发处检查，
-            # 本循环若能无限运行，定时停止后鼠标会继续点击。
+            # 本循环若能无限运行，立即停止后鼠标会继续点击。
+            # 「本局结束后停止」不在此处生效（那是打完本局才停），
+            # 本局内随时可通过 request_cancel_stop_after_game 反悔。
             if quitting_flag:
-                sys.exit(0)
-            if stop_after_current_game:
-                info_print("已到计划停止时间，自动化停止。")
-                quitting_flag = True
-                shutdown_event.set()
                 sys.exit(0)
             fresh = refresh_snapshot()
             if fresh is None:
@@ -710,6 +719,28 @@ def FSM_dispatch(next_state):
         return dispatch_dict[next_state]()
 
 
+def _initial_fsm_state():
+    """启动/恢复时判断当前所处阶段，用于“立即接管”。
+
+    屏幕像素(get_screen.get_state)在 BATTLING 时常不可靠，可能把对局误判成
+    主菜单，导致恢复后要等下一回合才进入战斗。改用 Power.log 兜底：
+    对局中(含对方回合)直接进入 Battling，换牌期进入 ChoosingCard；
+    只有未对局时才退回屏幕检测。
+    log_iter_func 每次开新 Power.log 会从头读到 EOF 一次性产出，
+    因此一次 update_log_state() 即可把 log_state 快进到当前最新。
+    """
+    try:
+        update_log_state()
+    except Exception:
+        pass
+    if log_state.game_entity_id != 0 and not log_state.is_end:
+        if log_state.game_num_turns_in_play > 0:
+            return FSM_BATTLING
+        return FSM_CHOOSING_CARD
+    state = get_screen.get_state()
+    return state if state else FSM_MAIN_MENU
+
+
 def AutoHS_automata():
     global FSM_state, quitting_flag
 
@@ -733,7 +764,7 @@ def AutoHS_automata():
             shutdown_event.set()
             sys.exit(0)
         if FSM_state == "":
-            FSM_state = get_screen.get_state()
+            FSM_state = _initial_fsm_state()
         FSM_state = FSM_dispatch(FSM_state)
 
 

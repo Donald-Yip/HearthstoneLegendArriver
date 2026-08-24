@@ -115,7 +115,7 @@ def _log(level: str, msg: str):
 
 def _overlay_key(line: str) -> bool:
     keys = ("回合", "延时", "轮到己方", "等待", "[推荐]", "[执行]",
-            "识别换牌", "阶段", "对局结束", "未对局")
+            "识别换牌", "阶段", "对局结束", "未对局", "本局结束", "立即停止")
     return ("[OCR]" not in line) and any(k in line for k in keys)
 
 
@@ -275,8 +275,7 @@ def _start_automation():
 
 def _automation_worker(fsm):
     summary = {"games": 0, "wins": 0}
-    if log_overlay is not None:
-        log_overlay.start(on_start=lambda: api_start({}), on_halt=_overlay_halt, is_running=_overlay_is_running, on_stop_after=_overlay_stop_after)
+    _bind_overlay()
     # 自动化在后台线程运行；get_screen 等模块使用 win32com / win32ui（COM），
     # COM 要求线程级初始化，否则报“尚未调用 CoInitialize”并导致线程崩溃。
     com_ready = False
@@ -559,6 +558,42 @@ def api_calibrate():
     return {"ok": True, "message": "校准工具已启动（无预览：拖绿框对齐盒子面板后按 S 保存，Esc 退出）"}
 
 
+def _hearthstone_foreground_guard():
+    """常驻守护：确保炉石主窗口在前台（复用脚本开始的置顶方式）。
+
+    每 30 分钟检查一次当前前台窗口；若不是炉石主窗口，就用
+    get_screen.move_window_foreground（同「开始对战」脚本开头的一致）
+    把炉石切回最前台。首次启动即校正一次，之后按间隔周期检查。
+    """
+    interval = 30 * 60
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()   # move_window_foreground 用 WScript.Shell(COM)
+    except Exception:
+        pass
+    try:
+        import get_screen
+        import win32gui
+    except Exception as exc:
+        _log("WARN", f"炉石前台守护不可用：{exc}")
+        return
+    first = True
+    while True:
+        if not first:
+            time.sleep(interval)
+        first = False
+        try:
+            hwnd = get_screen.get_HS_hwnd()
+            if not hwnd:
+                continue  # 炉石未运行，跳过
+            if win32gui.GetForegroundWindow() == hwnd:
+                continue  # 已在前台
+            get_screen.move_window_foreground(hwnd)
+            _log("SYS", "检测到炉石不在前台，已自动切换到前台。")
+        except Exception:
+            pass
+
+
 def _stage_label(ls):
     if getattr(ls, "game_entity_id", 0) == 0:
         return "未对局"
@@ -613,12 +648,32 @@ def _stage_monitor_loop():
 
 
 def _overlay_stop_after():
-    api_stop({"mode": "after_game"})
+    """切换“本局结束后停止”：已设则取消，未设则请求本局结束后停。
+
+    对局进行中随时可反悔（再点一次取消），无需重启脚本。
+    """
+    with CTRL.lock:
+        fsm = CTRL.fsm
+        active = bool(getattr(fsm, "stop_after_current_game", False)) \
+            if fsm is not None else False
+    if active:
+        try:
+            fsm.request_cancel_stop_after_game()
+        except Exception as exc:
+            _log("ERROR", f"取消「本局结束后停止」失败：{exc}")
+    else:
+        api_stop({"mode": "after_game"})
 
 
 def _overlay_is_running():
     with CTRL.lock:
         return CTRL.automation_thread is not None
+
+
+def _overlay_is_stop_after():
+    with CTRL.lock:
+        fsm = CTRL.fsm
+        return bool(getattr(fsm, "stop_after_current_game", False)) if fsm is not None else False
 
 
 def _overlay_halt():
@@ -630,6 +685,22 @@ def _overlay_halt():
         api_start({})
 
 
+def _bind_overlay():
+    """绑定日志浮窗回调（开始/中止/本局结束后停止 + 状态查询）。
+
+    供自动化线程第一次启动与网页“开启浮窗”共用，避免重复。
+    """
+    if log_overlay is None:
+        return
+    log_overlay.start(
+        on_start=lambda: api_start({}),
+        on_halt=_overlay_halt,
+        is_running=_overlay_is_running,
+        on_stop_after=_overlay_stop_after,
+        is_stop_after=_overlay_is_stop_after,
+    )
+
+
 def api_toggle_overlay(body=None):
     """开/关右上角实时日志浮窗。"""
     if log_overlay is None:
@@ -637,7 +708,7 @@ def api_toggle_overlay(body=None):
     if log_overlay.is_running():
         log_overlay.stop()
         return {"ok": True, "enabled": False, "message": "日志浮窗已关闭"}
-    log_overlay.start(on_start=lambda: api_start({}), on_halt=_overlay_halt, is_running=_overlay_is_running, on_stop_after=_overlay_stop_after)
+    _bind_overlay()
     return {"ok": True, "enabled": True, "message": "日志浮窗已开启"}
 
 
@@ -845,6 +916,9 @@ def main():
     # 常驻阶段监测线程：停止自动化也继续检测当前阶段（随时可恢复）
     threading.Thread(target=_stage_monitor_loop, name="hs-stage",
                      daemon=True).start()
+    # 常驻前台守护线程：每 30 分钟把炉石切回最前台
+    threading.Thread(target=_hearthstone_foreground_guard,
+                     name="hs-fg-guard", daemon=True).start()
     cfg = load_config()
     _apply_constants(cfg.get("name") or "", cfg.get("log_root") or "")
     _boot_resume_schedule()
