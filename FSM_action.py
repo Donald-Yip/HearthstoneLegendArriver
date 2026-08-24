@@ -58,6 +58,7 @@ player_turn_delay_key = None
 last_automation_diagnostic = None
 _snapshot_cache_key = None
 _snapshot_cache = None
+_mulligan_diagnostic_key = None
 # 调试快照写盘节流：日志每次变化都全量序列化整个 log_state 会拖慢主循环，
 # 只在间隔 SNAPSHOT_WRITE_INTERVAL 秒后重新写盘。
 SNAPSHOT_WRITE_INTERVAL = 5.0
@@ -154,7 +155,7 @@ def reset_game_session():
     global active_game_generation, choose_hero_count
     global mulligan_delay_generation, player_turn_delay_key
     global last_automation_diagnostic
-    global _snapshot_cache_key, _snapshot_cache
+    global _snapshot_cache_key, _snapshot_cache, _mulligan_diagnostic_key
     initialize_recommendation_automation()
     active_game_generation = log_state.game_generation
     choose_hero_count = 0
@@ -163,6 +164,7 @@ def reset_game_session():
     last_automation_diagnostic = None
     _snapshot_cache_key = None
     _snapshot_cache = None
+    _mulligan_diagnostic_key = None
     click.center_mouse()
 
 
@@ -170,7 +172,7 @@ def init():
     global log_state, log_iter, choose_hero_count, active_game_generation
     global mulligan_delay_generation, player_turn_delay_key
     global last_automation_diagnostic
-    global _snapshot_cache_key, _snapshot_cache
+    global _snapshot_cache_key, _snapshot_cache, _mulligan_diagnostic_key
 
     log_state = LogState()
     log_iter = log_iter_func(HEARTHSTONE_LOG_ROOT)
@@ -181,6 +183,7 @@ def init():
     last_automation_diagnostic = None
     _snapshot_cache_key = None
     _snapshot_cache = None
+    _mulligan_diagnostic_key = None
     shutdown_event.clear()
     initialize_recommendation_automation()
     click.center_mouse()
@@ -454,11 +457,20 @@ def ChoosingCardAction():
                 confirmed_waiting = True
                 confirmed_hand = _mulligan_hand_identity(
                     refresh_snapshot() or fresh)
-                manual_controller.output("已执行换牌，等待确认……")
+                _report_mulligan_diagnostic(
+                    "confirmed", "已执行换牌，等待确认……")
                 time.sleep(0.3)
                 continue
-            manual_controller.output(
-                f"换牌推荐暂不可执行，继续重试：{result.diagnostics}")
+            message = f"换牌推荐暂不可执行，继续重试：{result.diagnostics}"
+            # 换牌面板已不在/阶段已变更时给出更明确提示，避免误以为卡死。
+            diag = result.diagnostics
+            if (diag == "recommendation_is_not_mulligan"
+                    or diag.endswith(":recommendation_is_not_mulligan")
+                    or diag == "mulligan_stage_changed"
+                    or diag == "hand_changed"):
+                message = ("换牌阶段未检测到可执行的留牌面板（可能已提交或"
+                           "推荐尚未刷新），等待对局开始……")
+            _report_mulligan_diagnostic(result.diagnostics, message)
             time.sleep(0.3)
 
     selected = manual_controller.choose_mulligan(snapshot)
@@ -523,6 +535,20 @@ def _report_automation_diagnostic(code, message):
         return
     manual_controller.output(message)
     last_automation_diagnostic = code
+
+
+def _report_mulligan_diagnostic(code, message):
+    """Report a stable mulligan retry state once instead of every 0.3s loop.
+
+    换牌阶段如果 OCR 暂时读不出/面板已变更，原逻辑会每 0.3s 打印一次
+    「换牌推荐暂不可执行」，在浮窗里刷屏。这里按诊断码去重，只在原因
+    变化时输出一次，浮窗能稳定看见卡在哪一步。
+    """
+    global _mulligan_diagnostic_key
+    if _mulligan_diagnostic_key == code:
+        return
+    manual_controller.output(message)
+    _mulligan_diagnostic_key = code
 
 
 def run_automatic_battle_step():
