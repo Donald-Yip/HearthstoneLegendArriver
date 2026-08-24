@@ -276,7 +276,7 @@ def _start_automation():
 def _automation_worker(fsm):
     summary = {"games": 0, "wins": 0}
     if log_overlay is not None:
-        log_overlay.start(on_start=lambda: api_start({}), on_halt=_overlay_halt, is_running=_overlay_is_running)
+        log_overlay.start(on_start=lambda: api_start({}), on_halt=_overlay_halt, is_running=_overlay_is_running, on_stop_after=_overlay_stop_after)
     # 自动化在后台线程运行；get_screen 等模块使用 win32com / win32ui（COM），
     # COM 要求线程级初始化，否则报“尚未调用 CoInitialize”并导致线程崩溃。
     com_ready = False
@@ -612,6 +612,10 @@ def _stage_monitor_loop():
         time.sleep(0.3)
 
 
+def _overlay_stop_after():
+    api_stop({"mode": "after_game"})
+
+
 def _overlay_is_running():
     with CTRL.lock:
         return CTRL.automation_thread is not None
@@ -633,7 +637,7 @@ def api_toggle_overlay(body=None):
     if log_overlay.is_running():
         log_overlay.stop()
         return {"ok": True, "enabled": False, "message": "日志浮窗已关闭"}
-    log_overlay.start(on_start=lambda: api_start({}), on_halt=_overlay_halt, is_running=_overlay_is_running)
+    log_overlay.start(on_start=lambda: api_start({}), on_halt=_overlay_halt, is_running=_overlay_is_running, on_stop_after=_overlay_stop_after)
     return {"ok": True, "enabled": True, "message": "日志浮窗已开启"}
 
 

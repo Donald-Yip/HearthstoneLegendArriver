@@ -44,15 +44,18 @@ _STOP = threading.Event()
 _ON_START = None
 _ON_HALT = None
 _IS_RUNNING = None
+_ON_STOP_AFTER = None
 
 
-def start(on_start=None, on_halt=None, is_running=None) -> None:
-    global _ON_START, _ON_HALT, _IS_RUNNING
+def start(on_start=None, on_halt=None, is_running=None,
+          on_stop_after=None) -> None:
+    global _ON_START, _ON_HALT, _IS_RUNNING, _ON_STOP_AFTER
     if _STARTED[0]:
         return
     _ON_START = on_start
     _ON_HALT = on_halt
     _IS_RUNNING = is_running
+    _ON_STOP_AFTER = on_stop_after
     _STOP.clear()
     _STARTED[0] = True
     threading.Thread(target=_run, name="hs-log-overlay", daemon=True).start()
@@ -106,6 +109,16 @@ def _run() -> None:
                              font=("Microsoft YaHei", 10, "bold"),
                              command=_call_halt)
         halt_btn.pack(fill="x")
+
+        def _call_stop_after():
+            if _ON_STOP_AFTER is not None:
+                _ON_STOP_AFTER()
+
+        stop_after_btn = tk.Button(root, text="⏸ 本局结束后停止", bg="#d35400",
+                                   fg="white",
+                                   font=("Microsoft YaHei", 10, "bold"),
+                                   command=_call_stop_after)
+        stop_after_btn.pack(fill="x")
         body = tk.Frame(root, bg=BG)
         body.pack(fill="both", expand=True)
         text = tk.Text(body, bg=BG, fg="white", font=("Microsoft YaHei", 10),
