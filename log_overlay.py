@@ -101,10 +101,12 @@ def push(line: str, _level: str = "INFO") -> None:
 
 
 def _save_log() -> str:
-    """把当前对战日志写入磁盘，返回保存路径。"""
+    """把当前对战日志写入 logs/ 子目录，返回保存路径。"""
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     root = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(root, f"对战日志_{ts}.txt")
+    log_dir = os.path.join(root, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    path = os.path.join(log_dir, f"对战日志_{ts}.txt")
     with _LOCK:
         lines = [ln for ln, _ in list(_LINES)]
     with open(path, "w", encoding="utf-8") as f:
@@ -156,12 +158,11 @@ def is_running() -> bool:
 def _raise_hearthstone() -> None:
     """Return the foreground window to the Hearthstone main window.
 
-    The topmost tkinter overlay grabs focus/activation when clicked, pushing
-    Hearthstone off the foreground. Enumerate visible top-level windows, find
-    the one whose title contains “炉石/Hearthstone”, and raise it. Failures are
-    silent (they must not break the overlay).
+    等效于“鼠标真点一下炉石”：先模拟按下/松开 Alt 绕过 Windows 前台锁，
+    再 ShowWindow + SetForegroundWindow + BringWindowToTop。失败静默。
     """
     try:
+        import ctypes
         import win32gui
         import win32con
     except Exception:
@@ -188,6 +189,12 @@ def _raise_hearthstone() -> None:
     hwnd = target[0]
     if not hwnd:
         return
+    # 模拟 Alt 键，授予本进程“可切换到前台”的权限（等同用户按了一次键）。
+    try:
+        ctypes.windll.user32.keybd_event(0x12, 0, 0, 0)   # VK_MENU 按下
+        ctypes.windll.user32.keybd_event(0x12, 0, 2, 0)   # VK_MENU 抬起
+    except Exception:
+        pass
     try:
         win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
     except Exception:
@@ -198,6 +205,31 @@ def _raise_hearthstone() -> None:
         pass
     try:
         win32gui.BringWindowToTop(hwnd)
+    except Exception:
+        pass
+
+
+def _disable_overlay_activation(root) -> None:
+    """给浮窗加 WS_EX_NOACTIVATE/TOOLWINDOW：点它不抢炉石前台。
+
+    普通 tkinter 窗口被点击会获得焦点，把炉石顶出“前台”，导致 OCR 的
+    hearthstone_not_foreground 检查失败、自动对战停摆。加上这两个扩展样式后，
+    浮窗像 HUD 一样不参与激活，鼠标点击仍可触发按钮。
+    """
+    try:
+        import ctypes
+    except Exception:
+        return
+    try:
+        root.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(root.winfo_id()) \
+            or root.winfo_id()
+        GWL_EXSTYLE = -20
+        WS_EX_TOOLWINDOW = 0x00000080
+        WS_EX_NOACTIVATE = 0x08000000
+        style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+        style |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
+        ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
     except Exception:
         pass
 
@@ -217,11 +249,12 @@ def _run() -> None:
         root.attributes("-alpha", 0.94)
         sw = root.winfo_screenwidth()
         sh = root.winfo_screenheight()
-        W, H = 292, 372
+        W, H = 292, 470
         x = sw - W - 12
         y = 12
         root.geometry(f"{W}x{H}+{x}+{y}")
         root.configure(bg=TITLE_BG)
+        _disable_overlay_activation(root)
 
         def _hover(c):
             # lighten a hex color for hover feedback
@@ -309,8 +342,14 @@ def _run() -> None:
             try:
                 path = _save_log()
                 push(f"[SYS] 对战日志已保存：{path}")
+                save_btn.config(text="✓  已保存", bg=OK)
+                root.after(2000, lambda: save_btn.config(
+                    text="💾  保存日志", bg=OK))
             except Exception as exc:
                 push(f"[SYS] 保存对战日志失败：{exc}")
+                save_btn.config(text="✗  保存失败", bg=DANGER)
+                root.after(2000, lambda: save_btn.config(
+                    text="💾  保存日志", bg=OK))
             finally:
                 _raise_hearthstone()
 
@@ -356,6 +395,8 @@ def _run() -> None:
         root.bind("<Button-1>", _start_drag)
         root.bind("<B1-Motion>", _on_drag)
 
+        rendered = [0]
+
         def _update():
             if _STOP.is_set():
                 root.destroy()
@@ -364,11 +405,17 @@ def _run() -> None:
             with _LOCK:
                 lines = list(_LINES)
             pos = text.yview()
-            text.delete("1.0", "end")
-            for ln, turn in lines:
+            at_bottom = pos[1] >= 0.999
+            if len(lines) < rendered[0]:
+                # 缓冲区溢出丢弃了旧行：全量重建并强制跟随底部。
+                rendered[0] = 0
+                text.delete("1.0", "end")
+                at_bottom = True
+            for ln, turn in lines[rendered[0]:]:
                 tag = "turn" if turn else (
                     "act" if ln.startswith(("[推荐]", "[执行]")) else "dim")
                 text.insert("end", ln + "\n", tag)
+            rendered[0] = len(lines)
             if _IS_RUNNING is not None:
                 if _IS_RUNNING():
                     halt_btn.config(text="⏹  中止", bg=DANGER,
@@ -404,7 +451,8 @@ def _run() -> None:
                 delay_label.config(text="延时：无", fg=DIM)
                 delay_canvas.delete("all")
             _set_stop_after_state()
-            text.yview_moveto(pos[0])
+            if at_bottom and rendered[0]:
+                text.see("end")
             root.after(_REFRESH_MS, _update)
 
         _update()
