@@ -33,6 +33,7 @@ ACCENT = "#4aa3ff"
 DANGER = "#e05e4b"
 WARN = "#d98a2e"
 OK = "#2ea06b"
+DISABLED = "#394050"
 
 
 def _turn_start(line: str) -> bool:
@@ -57,11 +58,14 @@ _ON_HALT = None
 _IS_RUNNING = None
 _ON_STOP_AFTER = None
 _IS_STOP_AFTER = None
+_IS_IN_GAME = None
 
 
 def start(on_start=None, on_halt=None, is_running=None,
-          on_stop_after=None, is_stop_after=None) -> None:
+          on_stop_after=None, is_stop_after=None,
+          is_in_game=None) -> None:
     global _ON_START, _ON_HALT, _IS_RUNNING, _ON_STOP_AFTER, _IS_STOP_AFTER
+    global _IS_IN_GAME
     if _STARTED[0]:
         return
     _ON_START = on_start
@@ -69,6 +73,7 @@ def start(on_start=None, on_halt=None, is_running=None,
     _IS_RUNNING = is_running
     _ON_STOP_AFTER = on_stop_after
     _IS_STOP_AFTER = is_stop_after
+    _IS_IN_GAME = is_in_game
     _STOP.clear()
     _STARTED[0] = True
     threading.Thread(target=_run, name="hs-log-overlay", daemon=True).start()
@@ -192,6 +197,9 @@ def _run() -> None:
 
         def _call_start():
             try:
+                # 对局已开始时按钮应处于禁用态；这里再兜底一次，避免误触发。
+                if _IS_IN_GAME is not None and _IS_IN_GAME():
+                    return
                 if _ON_START is not None:
                     _ON_START()
             finally:
@@ -280,6 +288,17 @@ def _run() -> None:
                                     activebackground=DANGER)
                 else:
                     halt_btn.config(text="▶  恢复", bg=OK, activebackground=OK)
+            if _IS_IN_GAME is not None and _IS_IN_GAME():
+                start_btn.config(state="disabled", text="⏳  对局进行中",
+                                 bg=DISABLED, activebackground=DISABLED,
+                                 disabledbackground=DISABLED,
+                                 disabledforeground=DIM,
+                                 cursor="arrow")
+            else:
+                start_btn.config(state="normal", text="▶  开始对战",
+                                 bg=ACCENT, activebackground=ACCENT,
+                                 disabledforeground=DIM,
+                                 cursor="hand2")
             _set_stop_after_state()
             text.yview_moveto(pos[0])
             root.after(_REFRESH_MS, _update)

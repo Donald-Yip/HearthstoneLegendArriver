@@ -595,6 +595,10 @@ def _hearthstone_foreground_guard():
             pass
 
 
+# 常驻阶段监测线程维护的当前阶段标签（供浮窗“开始对战”按钮禁用判定）。
+_current_stage = None
+
+
 def _stage_label(ls):
     if getattr(ls, "game_entity_id", 0) == 0:
         return "未对局"
@@ -613,6 +617,7 @@ def _stage_label(ls):
 
 def _stage_monitor_loop():
     """常驻阶段监测：独立读 Power.log，阶段变化打 -----xx阶段-----。"""
+    global _current_stage
     try:
         from log_state import LogState, log_iter_func, update_state
     except Exception as exc:
@@ -642,6 +647,7 @@ def _stage_monitor_loop():
         except Exception:
             pass
         stage = _stage_label(ls)
+        _current_stage = stage
         if stage != last:
             last = stage
             _log("SYS", f"-----{stage}阶段-----")
@@ -669,6 +675,20 @@ def _overlay_stop_after():
 def _overlay_is_running():
     with CTRL.lock:
         return CTRL.automation_thread is not None
+
+
+def _overlay_is_in_game():
+    """对局是否已开始（换牌/出牌/对手回合），或自动化正在运行。
+
+    供浮窗“开始对战”按钮禁用判定：对局进行中不允许再点开始，
+    避免脚本被误触发而重复启动/复位。
+    """
+    with CTRL.lock:
+        running = CTRL.automation_thread is not None
+    stage = _current_stage
+    if stage in ("换牌", "我方出牌", "对手回合"):
+        return True
+    return running
 
 
 def _overlay_is_stop_after():
@@ -699,6 +719,7 @@ def _bind_overlay():
         is_running=_overlay_is_running,
         on_stop_after=_overlay_stop_after,
         is_stop_after=_overlay_is_stop_after,
+        is_in_game=_overlay_is_in_game,
     )
 
 
