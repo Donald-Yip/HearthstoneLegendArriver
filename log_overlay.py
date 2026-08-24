@@ -266,12 +266,22 @@ def _run() -> None:
                                    _call_stop_after)
         stop_after_btn.pack(fill="x", pady=3)
 
+        # ---- delay progress (bottom; 先占底部，日志区填剩余空间) ------
+        delay_frame = tk.Frame(root, bg=BG)
+        delay_frame.pack(side="bottom", fill="x", padx=8, pady=(0, 8))
+        delay_label = tk.Label(delay_frame, text="延时：无", bg=BG, fg=DIM,
+                               font=("Microsoft YaHei", 8), anchor="w")
+        delay_label.pack(fill="x")
+        delay_canvas = tk.Canvas(delay_frame, height=8, bg=PANEL,
+                                 highlightthickness=0)
+        delay_canvas.pack(fill="x", pady=(2, 0))
+
         # ---- log body --------------------------------------------------
         body = tk.Frame(root, bg=BG)
         body.pack(fill="both", expand=True, padx=8, pady=(6, 8))
         text = tk.Text(body, bg=BG, fg=TEXT, font=("Microsoft YaHei", 9),
                        bd=0, highlightthickness=0, wrap="none",
-                       padx=2, pady=2, spacing1=2, spacing3=2)
+                       height=12, padx=2, pady=2, spacing1=2, spacing3=2)
         text.pack(side="left", fill="both", expand=True)
         scroll = tk.Scrollbar(body, orient="vertical", command=text.yview,
                               width=10)
@@ -280,16 +290,6 @@ def _run() -> None:
         text.tag_config("turn", foreground=GREEN)
         text.tag_config("act", foreground=TEXT)
         text.tag_config("dim", foreground=DIM)
-
-        # ---- delay progress --------------------------------------------
-        delay_frame = tk.Frame(root, bg=BG)
-        delay_frame.pack(fill="x", padx=8, pady=(0, 8))
-        delay_label = tk.Label(delay_frame, text="延时：无", bg=BG, fg=DIM,
-                               font=("Microsoft YaHei", 8), anchor="w")
-        delay_label.pack(fill="x")
-        delay_canvas = tk.Canvas(delay_frame, height=8, bg=PANEL,
-                                 highlightthickness=0)
-        delay_canvas.pack(fill="x", pady=(2, 0))
 
         # ---- drag ------------------------------------------------------
         _drag = {"x": 0, "y": 0}
