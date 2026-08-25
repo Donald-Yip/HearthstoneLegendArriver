@@ -99,7 +99,17 @@ class RecommendationFlow:
                 return FlowStepResult(FlowStepStatus.RETRY,
                                       "execution_failed")
             # 操作结束后延时再开始下一轮截图+OCR（盒子更新面板留时间）。
-            self.sleep(self.post_action_delay)
+            # 通过 controller.output 推送延时行，让浮窗底部计时表显示该延时。
+            if self.post_action_delay:
+                output = getattr(self.controller, "output", None)
+                if output is not None:
+                    try:
+                        output(
+                            f"[SYS] 操作结束，延时 "
+                            f"{self.post_action_delay:.1f}s 后继续")
+                    except Exception:
+                        pass
+                self.sleep(self.post_action_delay)
             verified = self._verify_result(
                 proposed, adapted, current_frame,
                 fresh_state, fresh_revision)

@@ -77,7 +77,9 @@ def _update_delay_from_line(line: str) -> bool:
             "label": label, "desc": desc,
             "total": total, "started": time.time(),
         }
-        return True
+        # <1s 的短延时（如操作后 0.5s）进度条一闪而过，仍保留在正文日志
+        # 以便看清；长延时只驱动进度条、不进正文。
+        return total < 1.0
     if any(marker in line for marker in _delay_end_markers):
         _DELAY = None
         return True
@@ -476,13 +478,20 @@ def _run() -> None:
                 total = max(delay["total"], 0.001)
                 frac = min(max(elapsed / total, 0.0), 1.0)
                 remaining = max(total - elapsed, 0.0)
-                delay_label.config(
-                    text=f"⏳ {delay['desc']}（{remaining:.0f}/{total:.0f}s）",
-                    fg=TEXT)
-                w = max(delay_canvas.winfo_width(), 1)
-                delay_canvas.delete("all")
-                delay_canvas.create_rectangle(
-                    0, 0, w * frac, 8, fill=ACCENT, outline="")
+                if remaining <= 0:
+                    # 延时已结束：主动清空，避免 “0/0.5s” 这类短延时残留。
+                    with _LOCK:
+                        _DELAY = None
+                    delay_label.config(text="延时：无", fg=DIM)
+                    delay_canvas.delete("all")
+                else:
+                    delay_label.config(
+                        text=f"⏳ {delay['desc']}（{remaining:.0f}/{total:.0f}s）",
+                        fg=TEXT)
+                    w = max(delay_canvas.winfo_width(), 1)
+                    delay_canvas.delete("all")
+                    delay_canvas.create_rectangle(
+                        0, 0, w * frac, 8, fill=ACCENT, outline="")
             else:
                 delay_label.config(text="延时：无", fg=DIM)
                 delay_canvas.delete("all")
