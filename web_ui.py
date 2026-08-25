@@ -695,6 +695,17 @@ def _overlay_is_stop_after():
         return bool(getattr(fsm, "stop_after_current_game", False)) if fsm is not None else False
 
 
+def _overlay_score():
+    """当前自动化战绩 (场数, 胜场)。供浮窗头部显示胜负情况。"""
+    with CTRL.lock:
+        fsm = CTRL.fsm
+    if fsm is None:
+        return None
+    games = int(getattr(fsm, "game_count", 0) or 0)
+    wins = int(getattr(fsm, "win_count", 0) or 0)
+    return games, wins
+
+
 def _overlay_halt():
     with CTRL.lock:
         running = CTRL.automation_thread is not None
@@ -718,6 +729,7 @@ def _bind_overlay():
         on_stop_after=_overlay_stop_after,
         is_stop_after=_overlay_is_stop_after,
         is_in_game=_overlay_is_in_game,
+        score_callback=_overlay_score,
     )
 
 

@@ -126,13 +126,14 @@ _IS_RUNNING = None
 _ON_STOP_AFTER = None
 _IS_STOP_AFTER = None
 _IS_IN_GAME = None
+_SCORE = None
 
 
 def start(on_start=None, on_halt=None, is_running=None,
           on_stop_after=None, is_stop_after=None,
-          is_in_game=None) -> None:
+          is_in_game=None, score_callback=None) -> None:
     global _ON_START, _ON_HALT, _IS_RUNNING, _ON_STOP_AFTER, _IS_STOP_AFTER
-    global _IS_IN_GAME
+    global _IS_IN_GAME, _SCORE
     if _STARTED[0]:
         return
     _ON_START = on_start
@@ -141,6 +142,7 @@ def start(on_start=None, on_halt=None, is_running=None,
     _ON_STOP_AFTER = on_stop_after
     _IS_STOP_AFTER = is_stop_after
     _IS_IN_GAME = is_in_game
+    _SCORE = score_callback
     _STOP.clear()
     _STARTED[0] = True
     threading.Thread(target=_run, name="hs-log-overlay", daemon=True).start()
@@ -289,6 +291,12 @@ def _run() -> None:
         title.pack(side="left", pady=8)
         tk.Frame(root, bg=PANEL, height=1).pack(fill="x")
 
+        # ---- 战绩行 -------------------------------------------------
+        score_label = tk.Label(root, text="📊 战绩： —", bg=TITLE_BG, fg=DIM,
+                               font=("Microsoft YaHei", 9), anchor="w")
+        score_label.pack(fill="x", padx=8, pady=(6, 0))
+        tk.Frame(root, bg=PANEL, height=1).pack(fill="x")
+
         # ---- buttons ---------------------------------------------------
         btn_frame = tk.Frame(root, bg=BG)
         btn_frame.pack(fill="x", padx=8, pady=(8, 0))
@@ -432,6 +440,17 @@ def _run() -> None:
                                  bg=ACCENT, activebackground=ACCENT,
                                  disabledforeground=DIM,
                                  cursor="hand2")
+            if _SCORE is not None:
+                score = _SCORE()
+                if score is not None:
+                    games, wins = score
+                    losses = max(games - wins, 0)
+                    rate = (wins / games * 100) if games else 0.0
+                    score_label.config(
+                        text=f"📊 战绩： {games} 场 · 胜 {wins} · 负 "
+                             f"{losses} · 胜率 {rate:.1f}%", fg=TEXT)
+                else:
+                    score_label.config(text="📊 战绩： —", fg=DIM)
             with _LOCK:
                 delay = dict(_DELAY) if _DELAY is not None else None
             if delay is not None:
