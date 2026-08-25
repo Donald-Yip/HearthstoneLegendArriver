@@ -134,7 +134,11 @@ def initialize_recommendation_automation():
         click, read_mulligan_action, _automation_state,
         action_context=click.hearthstone_action_session,
         stopped=shutdown_event.is_set,
-        first_delay=recommendation_config.mulligan_ready_delay_seconds,
+        # 上次修复把 first_delay 误设为 ready(7)，导致“开局先等7s 再OCR，
+        # OCR后 又等7s 再点击”两段 7s 叠加。这里 OCR 前的 7s 由
+        # ChoosingCardAction 的 ready 延时负责；MulliganFlow 内的延时是
+        # “OCR 成功 → 点击”之间的缓冲，统一用 post_ocr(5s)。
+        first_delay=recommendation_config.mulligan_post_ocr_delay_seconds,
         retry_delay=recommendation_config.mulligan_post_ocr_delay_seconds)
     recommendation_flow = RecommendationFlow(
         capture=recommendation_capture,
@@ -424,6 +428,7 @@ def ChoosingCardAction():
         #   “点击未生效”并重复跑换牌流，实际换牌已成功（表现：一直提示失败）。
         confirmed_waiting = False
         retry_count = 0
+        verified = False
         while True:
             # 循环内必须检查停止标志：主循环只在状态分发处检查，
             # 本循环若能无限运行，立即停止后鼠标会继续点击。
@@ -439,15 +444,26 @@ def ChoosingCardAction():
             if fresh.game_num_turns_in_play > 0:
                 return FSM_BATTLING
             if confirmed_waiting:
+                if not verified:
+                    verified = True
+                    # 二次校验：面板仍在 → 点击未生效，重新执行换牌。
+                    if auto_mulligan_flow.panel_present():
+                        confirmed_waiting = False
+                        verified = False
+                        retry_count = 0
+                        manual_controller.output(
+                            "换牌点击未生效（面板仍在），重新执行……")
+                        continue
                 # 已提交：等待对局开始（换牌窗口已过，不再重复执行）。
                 time.sleep(0.3)
                 continue
             result = auto_mulligan_flow.run()
             if result.status == MulliganStatus.CONFIRMED:
                 confirmed_waiting = True
+                verified = False
                 retry_count = 0
                 _report_mulligan_diagnostic(
-                    "confirmed", "已执行换牌，等待对手……")
+                    "confirmed", "已执行换牌，验证是否生效……")
                 time.sleep(0.3)
                 continue
             message = f"换牌推荐暂不可执行，继续重试：{result.diagnostics}"
