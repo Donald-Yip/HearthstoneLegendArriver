@@ -66,8 +66,9 @@ class RecommendationConfig:
     # 也留出面板稳定时间）；换牌重试也复用该延时。
     mulligan_post_ocr_delay_seconds: float = 5.0
     # 换牌“确认”按钮区域（屏幕坐标 left, top, right, bottom）。
+    # 对齐 commit_choose_card 的点击点 (960,850)，以该点为中心外扩。
     # 点击确认后该按钮消失；仍能识别到“确认”说明换牌未提交成功，需重试。
-    mulligan_confirm_roi: tuple[int, int, int, int] = (800, 810, 1120, 920)
+    mulligan_confirm_roi: tuple[int, int, int, int] = (860, 810, 1060, 890)
 
     # ------------------------------------------------------------------ 出牌
     # 每个新回合开始延时一次（给盒子更新推荐留时间），
