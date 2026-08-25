@@ -139,8 +139,7 @@ def initialize_recommendation_automation():
         # ChoosingCardAction 的 ready 延时负责；MulliganFlow 内的延时是
         # “OCR 成功 → 点击”之间的缓冲，统一用 post_ocr(5s)。
         first_delay=recommendation_config.mulligan_post_ocr_delay_seconds,
-        retry_delay=recommendation_config.mulligan_post_ocr_delay_seconds,
-        confirm_ready=confirm_button_present)
+        retry_delay=recommendation_config.mulligan_post_ocr_delay_seconds)
     recommendation_flow = RecommendationFlow(
         capture=recommendation_capture,
         reader=recommendation_reader,
@@ -422,14 +421,15 @@ def ChoosingCardAction():
 
     if auto_mulligan_flow is not None:
         auto_mulligan_flow.reset_delay()  # 每局首次用 ready(7)，重试用 post_ocr(5)
-        # 换牌自动流：
-        # - 识别/执行失败 → 立即重试（原重试机制不变）
-        # - 成功后不再重复执行，只快速轮询到对局进入战斗回合。
-        #   旧逻辑拿“点击后的手牌”当基准对比，Power.log 更新快时会误判
-        #   “点击未生效”并重复跑换牌流，实际换牌已成功（表现：一直提示失败）。
+        # 换牌自动流（理想流程）：
+        #   9s 等待后进入循环 → 每隔 mulligan_post_ocr(5s) 一次：
+        #     ① 先检测屏幕中间“确认”按钮是否在场（面板就绪的物理信号）
+        #     ② 在    → OCR 左侧留牌建议并执行换牌（替换+确认）
+        #        不在 → 等 5s 再试
+        #   点击后转为“确认按钮是否消失”校验：消失=已提交，仍在=未提交重试。
         confirmed_waiting = False
-        retry_count = 0
         verified = False
+        retry_delay = recommendation_config.mulligan_post_ocr_delay_seconds
         while True:
             # 循环内必须检查停止标志：主循环只在状态分发处检查，
             # 本循环若能无限运行，立即停止后鼠标会继续点击。
@@ -453,17 +453,23 @@ def ChoosingCardAction():
                     if confirm_button_present():
                         confirmed_waiting = False
                         verified = False
-                        retry_count = 0
-                        manual_controller.output(
+                        _report_mulligan_diagnostic(
+                            "confirm_still_there",
                             "换牌确认仍在（未提交成功），重新执行……")
                         continue
                 time.sleep(0.3)
+                continue
+            # 每轮开头先检测“确认”按钮：在 → 执行换牌；不在 → 等 5s 再试。
+            if not confirm_button_present():
+                _report_mulligan_diagnostic(
+                    "confirm_absent",
+                    "确认按钮未检测到（面板尚未就绪或已提交），等待重试……")
+                time.sleep(retry_delay)
                 continue
             result = auto_mulligan_flow.run()
             if result.status == MulliganStatus.CONFIRMED:
                 confirmed_waiting = True
                 verified = False
-                retry_count = 0
                 _report_mulligan_diagnostic(
                     "confirmed", "已执行换牌，检测确认按钮……")
                 time.sleep(0.3)
@@ -480,9 +486,6 @@ def ChoosingCardAction():
                 message = ("换牌阶段未检测到可执行的留牌面板（可能已提交或"
                            "面板未就绪），等待对局开始……")
             _report_mulligan_diagnostic(result.diagnostics, message)
-            # 受控退避：瞬时失败（OCR 未稳/推荐刷新中）逐步拉长等待，最大 2s。
-            retry_delay = min(0.5 * (2 ** retry_count), 2.0)
-            retry_count += 1
             time.sleep(retry_delay)
 
     selected = manual_controller.choose_mulligan(snapshot)
