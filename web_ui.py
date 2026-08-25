@@ -250,11 +250,14 @@ def _start_automation():
         traceback.print_exc()
         return False, f"自动化组件加载失败：{exc}"
     fsm = CTRL.fsm
-    # 重置运行状态（同一进程内可反复启停）；战绩跨中止保留，不在此清零。
+    # 重置运行状态；每次“打开脚本/开始对战”时战绩清零，从 0 计。
     fsm.quitting_flag = False
     fsm.stop_after_current_game = False
     fsm.FSM_state = ""
     fsm.time_begin = 0.0
+    fsm.game_count = 0
+    fsm.win_count = 0
+    fsm.concede_count = 0
     try:
         fsm.print_info_init()
         fsm.init()
