@@ -458,10 +458,22 @@ def update_state(state, line_info_container):
         # 下面这种情况明显是发生了错误. 一般会出现在在对战过程中关闭炉石
         # 再重新启动炉石. 此时在构建过程中看到的第一个确切的卡可能是对手
         # 场上的怪而非我自己的手牌, 进而误判 my_player_id
-        if MY_NAME and player_id == state.oppo_player_id and \
-                MY_NAME in player_name:
+        if MY_NAME and MY_NAME in player_name:
+            # 日志明确给出“我”的名字：直接确立己方 PlayerID，
+            # 不再依赖“第一张卡”的 CONTROLLER 推断（那会因先读到对手怪而反）。
+            try:
+                my_pid = str(player_id)
+                oppo_pid = str(3 - int(my_pid))
+            except (TypeError, ValueError):
+                my_pid = oppo_pid = None
+            if my_pid and (state.my_player_id != my_pid
+                           or state.oppo_player_id != oppo_pid):
+                state.my_player_id = my_pid
+                state.oppo_player_id = oppo_pid
+        elif state.my_player_id != "0" and \
+                player_id == state.oppo_player_id and MY_NAME in player_name:
             global _MY_PLAYER_SWAP_WARNED
-            # 自愈交换仍需执行；警告只在本次进程首次触发时打一次。
+            # 兜底：名字没能用于确立（如名字不含我），但发现“对手位是我名字”时交换。
             if not _MY_PLAYER_SWAP_WARNED:
                 warn_print("my_player_id may be wrong")
                 _MY_PLAYER_SWAP_WARNED = True
