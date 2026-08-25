@@ -693,15 +693,21 @@ def _overlay_is_stop_after():
         return bool(getattr(fsm, "stop_after_current_game", False)) if fsm is not None else False
 
 
-def _overlay_score():
-    """当前自动化战绩 (场数, 胜场)。供浮窗头部显示胜负情况。"""
+def _current_score():
+    """自动化战绩唯一数据源 (场数, 胜场)，供浮窗与 Web 页面共用。
+
+    fsm 尚未初始化时按 0 处理，保证浮窗与 /api/status 口径一致。
+    """
     with CTRL.lock:
         fsm = CTRL.fsm
-    if fsm is None:
-        return None
-    games = int(getattr(fsm, "game_count", 0) or 0)
-    wins = int(getattr(fsm, "win_count", 0) or 0)
+    games = int(getattr(fsm, "game_count", 0) or 0) if fsm is not None else 0
+    wins = int(getattr(fsm, "win_count", 0) or 0) if fsm is not None else 0
     return games, wins
+
+
+def _overlay_score():
+    """当前自动化战绩 (场数, 胜场)。供浮窗头部显示胜负情况。"""
+    return _current_score()
 
 
 def _overlay_reset_score():

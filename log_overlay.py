@@ -465,9 +465,11 @@ def _run() -> None:
                     games, wins = score
                     losses = max(games - wins, 0)
                     rate = (wins / games * 100) if games else 0.0
+                    # 与 Web 页面口径一致：0 场时胜率显示 “--”（而非 0.0%）。
+                    rate_txt = f"{rate:.1f}%" if games else "--"
                     score_label.config(
                         text=f"📊 战绩： {games} 场 · 胜 {wins} · 负 "
-                             f"{losses} · 胜率 {rate:.1f}%", fg=TEXT)
+                             f"{losses} · 胜率 {rate_txt}", fg=TEXT)
                 else:
                     score_label.config(text="📊 战绩： —", fg=DIM)
             with _LOCK:
