@@ -32,6 +32,8 @@ class LogState:
         self.general_choice_player = None
         self.general_choice_indexes = set()
         self.general_choice_ready = False
+        # 本局是否已警告过 my_player_id 交换（flush 每局重置，避免刷屏）。
+        self._swap_warned = False
 
     def __str__(self):
         res = \
@@ -454,9 +456,12 @@ def update_state(state, line_info_container):
         # 下面这种情况明显是发生了错误. 一般会出现在在对战过程中关闭炉石
         # 再重新启动炉石. 此时在构建过程中看到的第一个确切的卡可能是对手
         # 场上的怪而非我自己的手牌, 进而误判 my_player_id
-        if player_id == state.oppo_player_id and \
+        if MY_NAME and player_id == state.oppo_player_id and \
                 MY_NAME in player_name:
-            warn_print("my_player_id may be wrong")
+            # 自愈交换仍需执行，但警告每局只打一次，避免开脚本历史对局刷屏。
+            if not getattr(state, "_swap_warned", False):
+                warn_print("my_player_id may be wrong")
+                state._swap_warned = True
             state.my_player_id, state.oppo_player_id = \
                 state.oppo_player_id, state.my_player_id
 
