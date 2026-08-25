@@ -661,18 +661,25 @@ def _maybe_concede(snapshot):
     rate = read_ai_win_rate()
     if rate is None:
         # 读不到胜率（面板未就绪/OCR失败）：不激进投降，重置连续计数。
+        if _concede_streak:
+            manual_controller.output(
+                "[SYS] 自动投降检测：AI胜率读取失败，连续计数清零。")
         _concede_streak = 0
         return False
-    manual_controller.output(
-        f"[SYS] 自动投降检测：AI胜率 {rate:.1f}%（阈值 "
-        f"{cfg['threshold']:.0f}%，连续低于 {_concede_streak} 回合）")
     if rate < cfg["threshold"]:
+        # 先 +1 再提示，第一次低于阈值就显示“连续低于 1 回合”。
         _concede_streak += 1
+        manual_controller.output(
+            f"[SYS] 自动投降检测：AI胜率 {rate:.1f}%（阈值 "
+            f"{cfg['threshold']:.0f}%，连续低于 {_concede_streak} 回合）")
         if _concede_streak >= cfg["rounds"]:
             _concede_triggered = True
             return True
     else:
         _concede_streak = 0
+        manual_controller.output(
+            f"[SYS] 自动投降检测：AI胜率 {rate:.1f}%（阈值 "
+            f"{cfg['threshold']:.0f}%，未低于阈值，连续计数清零）")
     return False
 
 
