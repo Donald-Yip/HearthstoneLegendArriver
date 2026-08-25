@@ -7,6 +7,8 @@ from print_info import *
 import constants.constants
 
 MY_NAME = constants.constants.YOUR_NAME
+# 进程级：my_player_id 自愈交换的警告只打一次，避免读取历史日志刷屏。
+_MY_PLAYER_SWAP_WARNED = False
 
 
 def check_name():
@@ -458,10 +460,11 @@ def update_state(state, line_info_container):
         # 场上的怪而非我自己的手牌, 进而误判 my_player_id
         if MY_NAME and player_id == state.oppo_player_id and \
                 MY_NAME in player_name:
-            # 自愈交换仍需执行，但警告每局只打一次，避免开脚本历史对局刷屏。
-            if not getattr(state, "_swap_warned", False):
+            global _MY_PLAYER_SWAP_WARNED
+            # 自愈交换仍需执行；警告只在本次进程首次触发时打一次。
+            if not _MY_PLAYER_SWAP_WARNED:
                 warn_print("my_player_id may be wrong")
-                state._swap_warned = True
+                _MY_PLAYER_SWAP_WARNED = True
             state.my_player_id, state.oppo_player_id = \
                 state.oppo_player_id, state.my_player_id
 
