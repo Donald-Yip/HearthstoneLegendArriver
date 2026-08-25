@@ -710,14 +710,21 @@ def _overlay_score():
     return _current_score()
 
 
-def _overlay_reset_score():
-    """把战绩清零（浮窗“重置战绩”按钮）。"""
-    with CTRL.lock:
-        fsm = CTRL.fsm
-    if fsm is None:
-        return
-    fsm.game_count = 0
-    fsm.win_count = 0
+def _overlay_exit():
+    """浮窗“退出脚本”按钮：先停止自动化，再退出整个脚本进程。"""
+    try:
+        with CTRL.lock:
+            running = CTRL.automation_thread is not None
+        if running:
+            api_stop({"mode": "now"})
+    except Exception:
+        pass
+    try:
+        _log("SYS", "用户从浮窗点击“退出脚本”。")
+    except Exception:
+        pass
+    # 立即可靠结束进程（浮窗/自动化均为 daemon 线程，os._exit 直接终止）。
+    os._exit(0)
 
 
 def _overlay_halt():
@@ -744,7 +751,7 @@ def _bind_overlay():
         is_stop_after=_overlay_is_stop_after,
         is_in_game=_overlay_is_in_game,
         score_callback=_overlay_score,
-        reset_score_callback=_overlay_reset_score,
+        on_exit=_overlay_exit,
     )
 
 
