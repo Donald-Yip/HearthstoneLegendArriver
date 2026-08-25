@@ -702,16 +702,17 @@ def run_automatic_battle_step():
         return None
     if snapshot.is_end:
         return FSM_QUITTING_BATTLE
-    # 自动投降：每回合检测左上角 AI 胜率，连续低到阈值则主动认输。
-    if _maybe_concede(snapshot):
-        _do_concede()
-        return FSM_QUITTING_BATTLE
     if not snapshot.is_my_turn:
         _report_automation_diagnostic("opponent_turn", "等待对手操作。")
         # 对方回合清空延迟标记：每次切回我方回合必延时一次，
         # 同回合内多次出牌不再重复延时（不依赖可能失真的回合号）。
         player_turn_delay_key = None
         return None
+    # 自动投降：只在我方回合检测（对手回合不计入“连续回合”），
+    # 连续低于阈值达到设定回合数则主动认输。
+    if _maybe_concede(snapshot):
+        _do_concede()
+        return FSM_QUITTING_BATTLE
     _report_automation_diagnostic("my_turn", "轮到己方操作：开始读取推荐……")
     turn = snapshot.game_num_turns_in_play
     if player_turn_delay_key != turn:
