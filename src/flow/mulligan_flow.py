@@ -21,7 +21,7 @@ class MulliganFlow:
     def __init__(self, executor, action_supplier, state_supplier,
                  action_context=None, stopped=lambda: False,
                  sleep=time.sleep, pre_action_delay=5.0,
-                 first_delay=None, retry_delay=None):
+                 first_delay=None, retry_delay=None, confirm_ready=None):
         self.executor = executor
         self.action_supplier = action_supplier
         self.state_supplier = state_supplier
@@ -29,6 +29,10 @@ class MulliganFlow:
         self.sleep = sleep
         self.first_delay = first_delay if first_delay is not None else pre_action_delay
         self.retry_delay = retry_delay if retry_delay is not None else pre_action_delay
+        # 换牌面板“确认”按钮是否就绪的检测回调（None = 不启用前置检测）。
+        # 用于“先确认面板在再执行换牌”：按钮不在场就不点击，避免面板未
+        # 就绪时盲点。典型实现见 FSM_action.confirm_button_present()。
+        self.confirm_ready = confirm_ready
         self._delay_done = False
         if action_context is None:
             from contextlib import nullcontext
@@ -68,6 +72,12 @@ class MulliganFlow:
                     for index in selected):
                 return MulliganResult(MulliganStatus.CONCEDE,
                                       diagnostics="mulligan_slot_invalid")
+            # 前置门：确认按钮在场才执行换牌。按钮不在 → 说明面板未就绪
+            # 或已提交，交给外层继续轮询，不盲目点击。
+            if self.confirm_ready is not None and not self.confirm_ready():
+                return MulliganResult(
+                    MulliganStatus.CONCEDE,
+                    diagnostics="confirm_button_absent")
             delay = self.retry_delay if self._delay_done else self.first_delay
             print(f"已识别换牌建议，等待 {delay:.0f}s 后执行……")
             self.sleep(delay)

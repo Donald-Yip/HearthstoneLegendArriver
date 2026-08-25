@@ -139,7 +139,8 @@ def initialize_recommendation_automation():
         # ChoosingCardAction 的 ready 延时负责；MulliganFlow 内的延时是
         # “OCR 成功 → 点击”之间的缓冲，统一用 post_ocr(5s)。
         first_delay=recommendation_config.mulligan_post_ocr_delay_seconds,
-        retry_delay=recommendation_config.mulligan_post_ocr_delay_seconds)
+        retry_delay=recommendation_config.mulligan_post_ocr_delay_seconds,
+        confirm_ready=confirm_button_present)
     recommendation_flow = RecommendationFlow(
         capture=recommendation_capture,
         reader=recommendation_reader,
@@ -473,9 +474,11 @@ def ChoosingCardAction():
             if (diag == "recommendation_is_not_mulligan"
                     or diag.endswith(":recommendation_is_not_mulligan")
                     or diag == "mulligan_stage_changed"
-                    or diag == "hand_changed"):
+                    or diag == "hand_changed"
+                    or diag == "confirm_button_absent"
+                    or diag.endswith(":confirm_button_absent")):
                 message = ("换牌阶段未检测到可执行的留牌面板（可能已提交或"
-                           "推荐尚未刷新），等待对局开始……")
+                           "面板未就绪），等待对局开始……")
             _report_mulligan_diagnostic(result.diagnostics, message)
             # 受控退避：瞬时失败（OCR 未稳/推荐刷新中）逐步拉长等待，最大 2s。
             retry_delay = min(0.5 * (2 ** retry_count), 2.0)
