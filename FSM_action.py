@@ -446,15 +446,16 @@ def ChoosingCardAction():
             if confirmed_waiting:
                 if not verified:
                     verified = True
-                    # 二次校验：面板仍在 → 点击未生效，重新执行换牌。
-                    if auto_mulligan_flow.panel_present():
+                    # 点击确认后等界面切换，再检测“确认”按钮是否还在：
+                    # 还在 → 换牌未提交成功，重新执行；消失 → 已提交。
+                    time.sleep(0.5)
+                    if confirm_button_present():
                         confirmed_waiting = False
                         verified = False
                         retry_count = 0
                         manual_controller.output(
-                            "换牌点击未生效（面板仍在），重新执行……")
+                            "换牌确认仍在（未提交成功），重新执行……")
                         continue
-                # 已提交：等待对局开始（换牌窗口已过，不再重复执行）。
                 time.sleep(0.3)
                 continue
             result = auto_mulligan_flow.run()
@@ -463,7 +464,7 @@ def ChoosingCardAction():
                 verified = False
                 retry_count = 0
                 _report_mulligan_diagnostic(
-                    "confirmed", "已执行换牌，验证是否生效……")
+                    "confirmed", "已执行换牌，检测确认按钮……")
                 time.sleep(0.3)
                 continue
             message = f"换牌推荐暂不可执行，继续重试：{result.diagnostics}"
@@ -557,6 +558,32 @@ def _report_mulligan_diagnostic(code, message):
         return
     manual_controller.output(message)
     _mulligan_diagnostic_key = code
+
+
+def confirm_button_present() -> bool:
+    """换牌“确认”按钮是否仍在屏幕中间（提交后应消失）。
+
+    用于换牌点击后的二次校验：确认按钮还在 → 换牌未提交成功，需重试；
+    确认按钮消失 → 已提交，等待对局开始。用 OCR 读按钮区域的“确认”二字。
+    """
+    try:
+        import cv2
+        import numpy as np
+        from PIL import ImageGrab
+    except Exception:
+        return False
+    try:
+        left, top, right, bottom = recommendation_config.mulligan_confirm_roi
+        rgb = np.asarray(ImageGrab.grab(
+            bbox=(left, top, right, bottom), all_screens=False))
+        img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        evidence = mulligan_reader.backend.recognize(
+            img, f"confirm-{time.time():.3f}", "confirm")
+    except Exception:
+        return False
+    return any(
+        "确认" in line.text and line.confidence >= 0.5
+        for line in evidence.lines)
 
 
 def run_automatic_battle_step():

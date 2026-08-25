@@ -25,6 +25,20 @@ def _user_roi() -> Optional[tuple[int, int, int, int]]:
     return None
 
 
+def _user_confirm_roi() -> Optional[tuple[int, int, int, int]]:
+    """读取用户校准的换牌“确认”按钮区域（ui_config.json 的 mulligan_confirm_roi）。"""
+    try:
+        cfg_path = Path(__file__).resolve().parents[1] / "ui_config.json"
+        data = json.loads(cfg_path.read_text(encoding="utf-8"))
+        roi = data.get("mulligan_confirm_roi")
+        vals = tuple(int(v) for v in roi)
+        if len(vals) == 4 and 0 <= vals[0] < vals[2] and 0 <= vals[1] < vals[3]:
+            return vals
+    except Exception:
+        pass
+    return None
+
+
 @dataclass(frozen=True)
 class RecommendationConfig:
     # ------------------------------------------------------------------ 屏幕
@@ -50,7 +64,10 @@ class RecommendationConfig:
     mulligan_ready_delay_seconds: float = 9.0
     # 换牌识别成功到实际点击之间的缓冲（防止读错后立即点击，
     # 也留出面板稳定时间）；换牌重试也复用该延时。
-    mulligan_post_ocr_delay_seconds: float = 3.0
+    mulligan_post_ocr_delay_seconds: float = 5.0
+    # 换牌“确认”按钮区域（屏幕坐标 left, top, right, bottom）。
+    # 点击确认后该按钮消失；仍能识别到“确认”说明换牌未提交成功，需重试。
+    mulligan_confirm_roi: tuple[int, int, int, int] = (800, 810, 1120, 920)
 
     # ------------------------------------------------------------------ 出牌
     # 每个新回合开始延时一次（给盒子更新推荐留时间），
@@ -58,7 +75,7 @@ class RecommendationConfig:
     pre_action_delay_seconds: float = 7.0
     # 一次操作执行完成之后到下轮截图+OCR 的延时（0 = 立即开始）；
     # 配合上面"回合只延时一次"使用。
-    post_action_delay_seconds: float = 0.0
+    post_action_delay_seconds: float = 0.5
     # 单次读取/单次执行的超时保护。
     recognition_timeout_seconds: float = 2.0
     result_timeout_seconds: float = 5.0
@@ -67,7 +84,7 @@ class RecommendationConfig:
     # 预处理缩放倍数：1.5x 是实测识别精度/速度最佳点
     # （1.0x 快约 28% 但识别率下降不可接受；3.0x 无效且慢）。
     # 仍可用环境变量 OCR_PREPROCESS_SCALE 临时覆盖。
-    ocr_preprocess_scale: float = 1.4
+    ocr_preprocess_scale: float = 1.2
     # 自动线程数下限：OpenMP/MKL 线程默认取机器物理核数，
     # 低于此下限固定为此值（核数少的机器保守）。
     ocr_thread_min: int = 4
@@ -80,3 +97,6 @@ class RecommendationConfig:
         roi = _user_roi()
         if roi is not None:
             object.__setattr__(self, "recommendation_roi", roi)
+        confirm_roi = _user_confirm_roi()
+        if confirm_roi is not None:
+            object.__setattr__(self, "mulligan_confirm_roi", confirm_roi)

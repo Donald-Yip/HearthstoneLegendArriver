@@ -90,18 +90,6 @@ class MulliganFlow:
         """每局换牌开始时调用：首次用 ready_delay，重试用 retry_delay。"""
         self._delay_done = False
 
-    def panel_present(self) -> bool:
-        """换牌面板是否仍在场（能读到“替换N号位卡牌”的留牌句式）。
-
-        用于换牌点击后的二次校验：面板仍在 → 点击未生效，需要重试；
-        面板消失 → 已提交，等待对局开始。
-        """
-        try:
-            self.action_supplier()
-            return True
-        except Exception:
-            return False
-
     @staticmethod
     def _identity(state):
         return tuple((card.card_id, getattr(card, "entity_id", None))
