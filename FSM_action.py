@@ -709,6 +709,10 @@ def run_automatic_battle_step():
         return None
     if snapshot.is_end:
         return FSM_QUITTING_BATTLE
+    if _concede_triggered:
+        # 已触发自动认输：等待日志确认对局真正结束（COMPLETE）后再走结算计数，
+        # 避免点完认输立刻计数导致“完成对局”时机不准。
+        return None
     if not snapshot.is_my_turn:
         _report_automation_diagnostic("opponent_turn", "等待对手操作。")
         # 对方回合清空延迟标记：每次切回我方回合必延时一次，
@@ -719,7 +723,8 @@ def run_automatic_battle_step():
     # 连续低于阈值达到设定回合数则主动认输。
     if _maybe_concede(snapshot):
         _do_concede()
-        return FSM_QUITTING_BATTLE
+        # 认输后不立即返回结算，等上面 is_end 分支（日志 COMPLETE）再计数。
+        return None
     _report_automation_diagnostic("my_turn", "轮到己方操作：开始读取推荐……")
     turn = snapshot.game_num_turns_in_play
     if player_turn_delay_key != turn:

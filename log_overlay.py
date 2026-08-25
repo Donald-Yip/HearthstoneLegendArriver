@@ -467,14 +467,16 @@ def _run() -> None:
                     else:
                         games, wins = score
                         concedes = 0
-                    losses = max(games - wins, 0)
-                    rate = (wins / games * 100) if games else 0.0
-                    # 与 Web 页面口径一致：0 场时胜率显示 “--”（而非 0.0%）。
-                    rate_txt = f"{rate:.1f}%" if games else "--"
+                    # 负 = 真实输掉的局（不含自动认输）；认输单独列出；
+                    # 胜率按“胜/(胜+负)”计算，不把认输局摊进胜率。
+                    losses = max(games - wins - concedes, 0)
+                    played = wins + losses
+                    rate = (wins / played * 100) if played else 0.0
+                    rate_txt = f"{rate:.1f}%" if played else "--"
                     concede_txt = f" · 认输 {concedes}" if concedes else ""
                     score_label.config(
-                        text=f"📊 战绩： {games} 场 · 胜 {wins} · 负 "
-                             f"{losses} · 胜率 {rate_txt}{concede_txt}", fg=TEXT)
+                        text=f"📊 战绩： 胜 {wins} · 负 {losses} · "
+                             f"胜率 {rate_txt}{concede_txt}", fg=TEXT)
                 else:
                     score_label.config(text="📊 战绩： —", fg=DIM)
             with _LOCK:
