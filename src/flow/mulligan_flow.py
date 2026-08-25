@@ -47,10 +47,10 @@ class MulliganFlow:
             if self._identity(initial) != self._identity(fresh):
                 return MulliganResult(MulliganStatus.CONCEDE,
                                       diagnostics="hand_changed")
-            if (getattr(initial, "log_revision", None)
-                    != getattr(fresh, "log_revision", None)):
-                return MulliganResult(MulliganStatus.CONCEDE,
-                                      diagnostics="revision_changed")
+            # 换牌阶段 Power.log 会持续写入新行，log_revision 必然漂移；
+            # 若要求 initial==fresh 的 revision 完全一致，会在“识别到点击”
+            # 之前就频繁返回 revision_changed，导致换牌卡住。这里只要求
+            # 手牌指纹与对局阶段稳定，不再要求日志版本号一致。
             if (getattr(fresh, "is_end", False)
                     or getattr(fresh, "game_num_turns_in_play", 0) != 0):
                 return MulliganResult(MulliganStatus.CONCEDE,

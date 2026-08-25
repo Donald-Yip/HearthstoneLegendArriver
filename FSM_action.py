@@ -423,6 +423,7 @@ def ChoosingCardAction():
         #   旧逻辑拿“点击后的手牌”当基准对比，Power.log 更新快时会误判
         #   “点击未生效”并重复跑换牌流，实际换牌已成功（表现：一直提示失败）。
         confirmed_waiting = False
+        retry_count = 0
         while True:
             # 循环内必须检查停止标志：主循环只在状态分发处检查，
             # 本循环若能无限运行，立即停止后鼠标会继续点击。
@@ -444,6 +445,7 @@ def ChoosingCardAction():
             result = auto_mulligan_flow.run()
             if result.status == MulliganStatus.CONFIRMED:
                 confirmed_waiting = True
+                retry_count = 0
                 _report_mulligan_diagnostic(
                     "confirmed", "已执行换牌，等待对手……")
                 time.sleep(0.3)
@@ -458,7 +460,10 @@ def ChoosingCardAction():
                 message = ("换牌阶段未检测到可执行的留牌面板（可能已提交或"
                            "推荐尚未刷新），等待对局开始……")
             _report_mulligan_diagnostic(result.diagnostics, message)
-            time.sleep(0.3)
+            # 受控退避：瞬时失败（OCR 未稳/推荐刷新中）逐步拉长等待，最大 2s。
+            retry_delay = min(0.5 * (2 ** retry_count), 2.0)
+            retry_count += 1
+            time.sleep(retry_delay)
 
     selected = manual_controller.choose_mulligan(snapshot)
     fresh_snapshot = refresh_snapshot()
