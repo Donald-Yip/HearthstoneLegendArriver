@@ -321,7 +321,7 @@ def print_out():
         warn_print("HearthStone not found! Try to go back to HS")
 
     if FSM_state == FSM_CHOOSING_CARD:
-        game_count += 1
+        # 只在“真正打完一局”时计数（见 Battling），开局只记录开始时间。
         # sys_print("The " + str(game_count) + " game begins")
         time_begin = time.time()
 
@@ -618,7 +618,7 @@ def run_automatic_battle_step():
 
 
 def Battling():
-    global win_count
+    global win_count, game_count
 
     print_out()
     while True:
@@ -626,6 +626,8 @@ def Battling():
             sys.exit(0)
         next_state = run_automatic_battle_step()
         if next_state == FSM_QUITTING_BATTLE:
+            # 对局真正结束才计数：game_count=已完成场数，win_count=胜场。
+            game_count += 1
             if log_state.my_entity.query_tag("PLAYSTATE") == "WON":
                 win_count += 1
                 info_print("你赢得了这场对战")

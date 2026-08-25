@@ -127,13 +127,15 @@ _ON_STOP_AFTER = None
 _IS_STOP_AFTER = None
 _IS_IN_GAME = None
 _SCORE = None
+_RESET_SCORE = None
 
 
 def start(on_start=None, on_halt=None, is_running=None,
           on_stop_after=None, is_stop_after=None,
-          is_in_game=None, score_callback=None) -> None:
+          is_in_game=None, score_callback=None,
+          reset_score_callback=None) -> None:
     global _ON_START, _ON_HALT, _IS_RUNNING, _ON_STOP_AFTER, _IS_STOP_AFTER
-    global _IS_IN_GAME, _SCORE
+    global _IS_IN_GAME, _SCORE, _RESET_SCORE
     if _STARTED[0]:
         return
     _ON_START = on_start
@@ -143,6 +145,7 @@ def start(on_start=None, on_halt=None, is_running=None,
     _IS_STOP_AFTER = is_stop_after
     _IS_IN_GAME = is_in_game
     _SCORE = score_callback
+    _RESET_SCORE = reset_score_callback
     _STOP.clear()
     _STARTED[0] = True
     threading.Thread(target=_run, name="hs-log-overlay", daemon=True).start()
@@ -251,7 +254,7 @@ def _run() -> None:
         root.attributes("-alpha", 0.94)
         sw = root.winfo_screenwidth()
         sh = root.winfo_screenheight()
-        W, H = 292, 470
+        W, H = 292, 510
         x = sw - W - 12
         y = 12
         root.geometry(f"{W}x{H}+{x}+{y}")
@@ -363,6 +366,20 @@ def _run() -> None:
 
         save_btn = _make_btn(btn_frame, "💾  保存日志", OK, _call_save)
         save_btn.pack(fill="x", pady=3)
+
+        def _call_reset_score():
+            try:
+                if _RESET_SCORE is not None:
+                    _RESET_SCORE()
+                push("[SYS] 战绩已重置。")
+            except Exception as exc:
+                push(f"[SYS] 重置战绩失败：{exc}")
+            finally:
+                _raise_hearthstone()
+
+        reset_score_btn = _make_btn(btn_frame, "🔄  重置战绩", ACCENT,
+                                    _call_reset_score)
+        reset_score_btn.pack(fill="x", pady=3)
 
         # ---- delay progress (bottom; 先占底部，日志区填剩余空间) ------
         delay_frame = tk.Frame(root, bg=BG)

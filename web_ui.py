@@ -245,12 +245,10 @@ def _start_automation():
         traceback.print_exc()
         return False, f"自动化组件加载失败：{exc}"
     fsm = CTRL.fsm
-    # 重置运行状态（同一进程内可反复启停）
+    # 重置运行状态（同一进程内可反复启停）；战绩跨中止保留，不在此清零。
     fsm.quitting_flag = False
     fsm.stop_after_current_game = False
     fsm.FSM_state = ""
-    fsm.game_count = 0
-    fsm.win_count = 0
     fsm.time_begin = 0.0
     try:
         fsm.print_info_init()
@@ -706,6 +704,16 @@ def _overlay_score():
     return games, wins
 
 
+def _overlay_reset_score():
+    """把战绩清零（浮窗“重置战绩”按钮）。"""
+    with CTRL.lock:
+        fsm = CTRL.fsm
+    if fsm is None:
+        return
+    fsm.game_count = 0
+    fsm.win_count = 0
+
+
 def _overlay_halt():
     with CTRL.lock:
         running = CTRL.automation_thread is not None
@@ -730,6 +738,7 @@ def _bind_overlay():
         is_stop_after=_overlay_is_stop_after,
         is_in_game=_overlay_is_in_game,
         score_callback=_overlay_score,
+        reset_score_callback=_overlay_reset_score,
     )
 
 
