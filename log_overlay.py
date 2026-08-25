@@ -423,6 +423,7 @@ def _run() -> None:
         rendered = [0]
 
         def _update():
+            global _DELAY
             if _STOP.is_set():
                 root.destroy()
                 _STARTED[0] = False
