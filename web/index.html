@@ -211,6 +211,28 @@ input:disabled{opacity:.45;cursor:not-allowed}
     </section>
 
     <section class="card wide">
+      <h2 class="card-title">🏳️ 自动投降</h2>
+      <div class="input-row">
+        <label class="field" style="flex:none;min-width:90px">
+          <span class="field-label">启用</span>
+          <input id="chkConcede" type="checkbox" style="width:auto;height:22px">
+        </label>
+        <label class="field">
+          <span class="field-label">AI 胜率阈值（%）</span>
+          <input id="inpConcedeThreshold" type="number" min="0" max="100" step="0.5">
+        </label>
+        <label class="field">
+          <span class="field-label">连续回合数</span>
+          <input id="inpConcedeRounds" type="number" min="1" max="50" step="1">
+        </label>
+      </div>
+      <div class="btn-row">
+        <button id="btnSaveConcede" class="btn btn-warn" type="button">💾 保存自动投降</button>
+      </div>
+      <div class="hint-line">检测左上角盒子「AI胜率」，连续 N 回合低于阈值时自动执行：右下角齿轮 → 中间红色「认输」。默认关闭，需手动开启；自动化运行中不可修改。</div>
+    </section>
+
+    <section class="card wide">
       <h2 class="card-title">🎯 校准推荐区域</h2>
       <div class="btn-row">
         <button id="btnCalibrate" class="btn btn-ghost" type="button">📐 显示校准框</button>
@@ -284,6 +306,7 @@ function fmtCountdown(targetMs){
 var lastStatus = null;
 var logSeq = 0;
 var dirty = {name:false, log:false};
+var dirtyConcede = false;
 
 var PHASE_INFO = {
   idle:     {label:"空闲",            cls:"idle"},
@@ -345,6 +368,11 @@ function render(s){
 
   if (!dirty.name) $("inpName").value = s.config.name || "";
   if (!dirty.log) $("inpLog").value = s.config.log_root || "";
+  if (s.concede && !dirtyConcede){
+    $("chkConcede").checked = !!s.concede.enabled;
+    $("inpConcedeThreshold").value = s.concede.threshold;
+    $("inpConcedeRounds").value = s.concede.rounds;
+  }
 
   /* 倒计时芯片 */
   var cr = $("countdownRow"), chipS = $("chipStart"), chipE = $("chipEnd");
@@ -427,6 +455,9 @@ function refreshClock(){
 /* ---------- 配置 ---------- */
 $("inpName").addEventListener("input", function(){ dirty.name = true; });
 $("inpLog").addEventListener("input", function(){ dirty.log = true; });
+$("chkConcede").addEventListener("change", function(){ dirtyConcede = true; });
+$("inpConcedeThreshold").addEventListener("input", function(){ dirtyConcede = true; });
+$("inpConcedeRounds").addEventListener("input", function(){ dirtyConcede = true; });
 
 function saveConfig(){
   post("/api/config", {name:$("inpName").value.trim(), log_root:$("inpLog").value.trim()})
@@ -542,6 +573,22 @@ $("btnStopNow").addEventListener("click", function(){
 
 $("btnClearLog").addEventListener("click", function(){
   $("logBox").innerHTML = "";
+});
+
+/* ---------- 自动投降 ---------- */
+$("btnSaveConcede").addEventListener("click", function(){
+  post("/api/concede", {
+    enabled: $("chkConcede").checked,
+    threshold: $("inpConcedeThreshold").value,
+    rounds: $("inpConcedeRounds").value
+  }).then(function(r){
+    if (r.ok){
+      toast(r.message, "ok");
+      dirtyConcede = false;
+    } else {
+      toast(r.error || "保存失败", "error");
+    }
+  });
 });
 
 /* ---------- 启动 ---------- */

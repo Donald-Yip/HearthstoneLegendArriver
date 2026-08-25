@@ -60,6 +60,11 @@ DEFAULT_CONFIG = {
     "log_root": "",
     "schedule_start": None,
     "schedule_end": None,
+    "auto_concede": {
+        "enabled": False,
+        "threshold": 10.0,
+        "rounds": 3,
+    },
 }
 
 
@@ -443,6 +448,35 @@ def api_save_config(body: dict):
         _apply_constants(name, log_root)
     _log("SYS", f"配置已保存：用户 {name or '（未填写）'}，日志目录 {log_root or '（未填写）'}")
     return {"ok": True, "message": "配置已保存", "warnings": warnings}
+
+
+def api_save_concede(body):
+    """保存自动投降配置（ui_config.json 的 auto_concede 段）。"""
+    with CTRL.lock:
+        if CTRL.automation_thread is not None:
+            return {"ok": False, "error": "自动化运行中，请先停止后再修改自动投降配置。"}
+        cfg = load_config()
+        ac = dict(cfg.get("auto_concede") or {})
+        ac["enabled"] = bool(body.get("enabled", ac.get("enabled", False)))
+        try:
+            threshold = float(body.get("threshold", ac.get("threshold", 10.0)))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "阈值必须为数字（0-100）。"}
+        threshold = max(0.0, min(100.0, threshold))
+        try:
+            rounds = int(body.get("rounds", ac.get("rounds", 3)))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "连续回合数必须为整数（1-50）。"}
+        rounds = max(1, min(50, rounds))
+        ac["threshold"] = threshold
+        ac["rounds"] = rounds
+        cfg["auto_concede"] = ac
+        save_config(cfg)
+    _log("SYS", f"自动投降配置已保存：{'开启' if ac['enabled'] else '关闭'}，"
+                f"阈值 {threshold:.0f}%，连续 {rounds} 回合。")
+    return {"ok": True, "message": "自动投降配置已保存",
+            "concede": {"enabled": ac["enabled"],
+                        "threshold": threshold, "rounds": rounds}}
 
 
 def api_start(body: dict):
@@ -844,6 +878,7 @@ def status_snapshot():
         "game_elapsed_sec": elapsed,
         "schedule_start": start_iso,
         "schedule_end": end_iso,
+        "concede": cfg.get("auto_concede") or {"enabled": False, "threshold": 10.0, "rounds": 3},
         "config": {"name": cfg.get("name", ""), "log_root": cfg.get("log_root", "")},
         "last_error": err,
         "last_summary": summary,
@@ -932,6 +967,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_calibrate())
             elif path == "/api/overlay":
                 self._json(api_toggle_overlay(body))
+            elif path == "/api/concede":
+                self._json(api_save_concede(body))
             else:
                 self._json({"ok": False, "error": "未知接口"}, 404)
         except Exception as exc:

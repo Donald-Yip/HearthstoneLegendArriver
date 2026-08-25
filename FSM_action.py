@@ -1,5 +1,6 @@
 import _thread
 import random
+import re
 import sys
 import threading
 import time
@@ -59,6 +60,10 @@ last_automation_diagnostic = None
 _snapshot_cache_key = None
 _snapshot_cache = None
 _mulligan_diagnostic_key = None
+# 自动投降状态：连续低胜率检测 + 触发标记（每局重置）。
+_concede_streak = 0
+_concede_last_turn = None
+_concede_triggered = False
 # 调试快照写盘节流：日志每次变化都全量序列化整个 log_state 会拖慢主循环，
 # 只在间隔 SNAPSHOT_WRITE_INTERVAL 秒后重新写盘。
 SNAPSHOT_WRITE_INTERVAL = 5.0
@@ -160,6 +165,7 @@ def reset_game_session():
     global mulligan_delay_generation, player_turn_delay_key
     global last_automation_diagnostic
     global _snapshot_cache_key, _snapshot_cache, _mulligan_diagnostic_key
+    global _concede_streak, _concede_last_turn, _concede_triggered
     initialize_recommendation_automation()
     active_game_generation = log_state.game_generation
     choose_hero_count = 0
@@ -169,6 +175,9 @@ def reset_game_session():
     _snapshot_cache_key = None
     _snapshot_cache = None
     _mulligan_diagnostic_key = None
+    _concede_streak = 0
+    _concede_last_turn = None
+    _concede_triggered = False
     click.center_mouse()
 
 
@@ -177,6 +186,7 @@ def init():
     global mulligan_delay_generation, player_turn_delay_key
     global last_automation_diagnostic
     global _snapshot_cache_key, _snapshot_cache, _mulligan_diagnostic_key
+    global _concede_streak, _concede_last_turn, _concede_triggered
 
     log_state = LogState()
     log_iter = log_iter_func(HEARTHSTONE_LOG_ROOT)
@@ -188,6 +198,9 @@ def init():
     _snapshot_cache_key = None
     _snapshot_cache = None
     _mulligan_diagnostic_key = None
+    _concede_streak = 0
+    _concede_last_turn = None
+    _concede_triggered = False
     shutdown_event.clear()
     initialize_recommendation_automation()
     click.center_mouse()
@@ -592,6 +605,89 @@ def confirm_button_present() -> bool:
         for line in evidence.lines)
 
 
+def _load_concede_config():
+    """读取自动投降配置（ui_config.json 的 auto_concede 段）。"""
+    try:
+        import json
+        from pathlib import Path
+        p = Path(__file__).resolve().parent / "ui_config.json"
+        ac = json.loads(p.read_text(encoding="utf-8")).get("auto_concede") or {}
+        return {
+            "enabled": bool(ac.get("enabled", False)),
+            "threshold": float(ac.get("threshold", 10.0)),
+            "rounds": max(1, int(ac.get("rounds", 3))),
+        }
+    except Exception:
+        return {"enabled": False, "threshold": 10.0, "rounds": 3}
+
+
+def read_ai_win_rate():
+    """OCR 左上角盒子“AI胜率 X%”，返回百分数值；读不到返回 None。"""
+    try:
+        import cv2
+        import numpy as np
+        from PIL import ImageGrab
+        # 左上角盒子浮动条“AI胜率 49%”（1920x1080 实测区域）。
+        left, top, right, bottom = 110, 8, 270, 48
+        rgb = np.asarray(ImageGrab.grab(
+            bbox=(left, top, right, bottom), all_screens=False))
+        img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        evidence = mulligan_reader.backend.recognize(
+            img, f"winrate-{time.time():.3f}", "winrate")
+    except Exception:
+        return None
+    for line in evidence.lines:
+        m = re.search(r"(\d+(?:\.\d+)?)\s*%", line.text)
+        if m:
+            value = float(m.group(1))
+            if 0.0 <= value <= 100.0:
+                return value
+    return None
+
+
+def _maybe_concede(snapshot):
+    """每回合检测一次左上角 AI 胜率；连续低于阈值达到设定回合数则返回 True。"""
+    global _concede_streak, _concede_last_turn, _concede_triggered
+    if _concede_triggered:
+        return False
+    cfg = _load_concede_config()
+    if not cfg["enabled"]:
+        return False
+    turn = getattr(snapshot, "game_num_turns_in_play", 0)
+    if turn == _concede_last_turn:
+        return False  # 本回合已检测过
+    _concede_last_turn = turn
+    rate = read_ai_win_rate()
+    if rate is None:
+        # 读不到胜率（面板未就绪/OCR失败）：不激进投降，重置连续计数。
+        _concede_streak = 0
+        return False
+    manual_controller.output(
+        f"[SYS] 自动投降检测：AI胜率 {rate:.1f}%（阈值 "
+        f"{cfg['threshold']:.0f}%，连续低于 {_concede_streak} 回合）")
+    if rate < cfg["threshold"]:
+        _concede_streak += 1
+        if _concede_streak >= cfg["rounds"]:
+            _concede_triggered = True
+            return True
+    else:
+        _concede_streak = 0
+    return False
+
+
+def _do_concede():
+    """点击右下角齿轮 → 等菜单弹出 → 点中间红色“认输”。"""
+    manual_controller.output("[SYS] 持续低胜率，开始自动认输……")
+    try:
+        with click.hearthstone_action_session():
+            click.click_setting()      # 齿轮 (1895, 1060)
+            time.sleep(1.0)            # 等游戏菜单弹出
+            click.click_concede()      # 认输 (960, 380)
+        time.sleep(1.0)
+    except Exception as exc:
+        manual_controller.output(f"[SYS] 自动认输点击失败：{exc}")
+
+
 def run_automatic_battle_step():
     """Observe opponent turns; execute one newly validated player action."""
     global player_turn_delay_key, last_automation_diagnostic
@@ -602,6 +698,10 @@ def run_automatic_battle_step():
             "power_log_unavailable", "Power.log 暂不可用，继续重试。")
         return None
     if snapshot.is_end:
+        return FSM_QUITTING_BATTLE
+    # 自动投降：每回合检测左上角 AI 胜率，连续低到阈值则主动认输。
+    if _maybe_concede(snapshot):
+        _do_concede()
         return FSM_QUITTING_BATTLE
     if not snapshot.is_my_turn:
         _report_automation_diagnostic("opponent_turn", "等待对手操作。")
