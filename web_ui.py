@@ -309,7 +309,11 @@ def _automation_worker(fsm):
         except Exception:
             pass
         with CTRL.lock:
-            summary = {"games": int(fsm.game_count), "wins": int(fsm.win_count)}
+            summary = {
+                "games": int(fsm.game_count),
+                "wins": int(fsm.win_count),
+                "concedes": int(getattr(fsm, "concede_count", 0) or 0),
+            }
             CTRL.last_summary = {**summary, "stopped_by": CTRL.stopped_by}
             CTRL.automation_thread = None
             if CTRL.phase == "stopping" and CTRL.stopped_by == "schedule":
@@ -319,7 +323,9 @@ def _automation_worker(fsm):
             else:
                 CTRL.phase = "idle"
         if summary["games"]:
-            _log("SYS", f"自动化结束：共完成 {summary['games']} 场对战，赢 {summary['wins']} 场。")
+            _log("SYS", f"自动化结束：共完成 {summary['games']} 场对战，"
+                        f"赢 {summary['wins']} 场"
+                        f"{'，自动认输 ' + str(summary['concedes']) + ' 场' if summary['concedes'] else ''}。")
         else:
             _log("SYS", "自动化结束。")
         if com_ready:
@@ -728,7 +734,7 @@ def _overlay_is_stop_after():
 
 
 def _current_score():
-    """自动化战绩唯一数据源 (场数, 胜场)，供浮窗与 Web 页面共用。
+    """自动化战绩唯一数据源 (场数, 胜场, 自动认输数)，供浮窗与 Web 页面共用。
 
     fsm 尚未初始化时按 0 处理，保证浮窗与 /api/status 口径一致。
     """
@@ -736,11 +742,12 @@ def _current_score():
         fsm = CTRL.fsm
     games = int(getattr(fsm, "game_count", 0) or 0) if fsm is not None else 0
     wins = int(getattr(fsm, "win_count", 0) or 0) if fsm is not None else 0
-    return games, wins
+    concedes = int(getattr(fsm, "concede_count", 0) or 0) if fsm is not None else 0
+    return games, wins, concedes
 
 
 def _overlay_score():
-    """当前自动化战绩 (场数, 胜场)。供浮窗头部显示胜负情况。"""
+    """当前自动化战绩 (场数, 胜场, 自动认输数)。供浮窗头部显示胜负情况。"""
     return _current_score()
 
 
@@ -849,6 +856,7 @@ def status_snapshot():
         state = fsm.FSM_state if fsm is not None else ""
         games = int(fsm.game_count) if fsm is not None else 0
         wins = int(fsm.win_count) if fsm is not None else 0
+        concedes = int(getattr(fsm, "concede_count", 0) or 0) if fsm is not None else 0
         time_begin = float(getattr(fsm, "time_begin", 0.0) or 0.0)             if fsm is not None else 0.0
         stop_after = bool(fsm.stop_after_current_game) if fsm is not None else False
         sched = CTRL.schedule
@@ -874,6 +882,7 @@ def status_snapshot():
         "in_game": state in ("Choosing Card", "Battling", "Quitting Battle"),
         "games": games,
         "wins": wins,
+        "concede_count": concedes,
         "win_rate": win_rate,
         "game_elapsed_sec": elapsed,
         "schedule_start": start_iso,

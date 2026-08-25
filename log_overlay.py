@@ -461,14 +461,20 @@ def _run() -> None:
             if _SCORE is not None:
                 score = _SCORE()
                 if score is not None:
-                    games, wins = score
+                    # score 三元组：(场数, 胜场, 自动认输数)。兼容旧的二元组。
+                    if len(score) >= 3:
+                        games, wins, concedes = score
+                    else:
+                        games, wins = score
+                        concedes = 0
                     losses = max(games - wins, 0)
                     rate = (wins / games * 100) if games else 0.0
                     # 与 Web 页面口径一致：0 场时胜率显示 “--”（而非 0.0%）。
                     rate_txt = f"{rate:.1f}%" if games else "--"
+                    concede_txt = f" · 认输 {concedes}" if concedes else ""
                     score_label.config(
                         text=f"📊 战绩： {games} 场 · 胜 {wins} · 负 "
-                             f"{losses} · 胜率 {rate_txt}", fg=TEXT)
+                             f"{losses} · 胜率 {rate_txt}{concede_txt}", fg=TEXT)
                 else:
                     score_label.config(text="📊 战绩： —", fg=DIM)
             with _LOCK:

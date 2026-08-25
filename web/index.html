@@ -152,6 +152,7 @@ input:disabled{opacity:.45;cursor:not-allowed}
         <div class="stat"><div class="stat-value" id="stState">待机</div><div class="stat-label">当前状态</div></div>
         <div class="stat"><div class="stat-value" id="stGames">0</div><div class="stat-label">已完成对局</div></div>
         <div class="stat"><div class="stat-value" id="stWins">0</div><div class="stat-label">胜场</div></div>
+        <div class="stat"><div class="stat-value" id="stConcede">0</div><div class="stat-label">自动认输</div></div>
         <div class="stat"><div class="stat-value" id="stRate">--</div><div class="stat-label">胜率</div></div>
       </div>
       <div class="subrow" id="gameElapsedRow" style="display:none">
@@ -352,6 +353,7 @@ function render(s){
   $("stState").textContent = s.starting ? "启动中…" : (s.running ? s.state_label : (s.phase === "waiting" ? "等待定时启动" : (s.phase === "finished" ? "计划已完成" : "待机")));
   $("stGames").textContent = s.games;
   $("stWins").textContent = s.wins;
+  $("stConcede").textContent = s.concede_count || 0;
   $("stRate").textContent = s.games > 0 ? s.win_rate + "%" : "--";
 
   $("btnStart").disabled = busy;

@@ -32,6 +32,7 @@ FSM_state = ""
 time_begin = 0.0
 game_count = 0
 win_count = 0
+concede_count = 0
 quitting_flag = False
 # 定时计划 / Web 控制台：置 True 表示“本局对战结束后停止自动化”。
 # 对局进行中（换牌/对战/结算）不会立即退出，只有回到非对局状态才停止。
@@ -677,6 +678,8 @@ def _maybe_concede(snapshot):
 
 def _do_concede():
     """点击右下角齿轮 → 等菜单弹出 → 点中间红色“认输”。"""
+    global concede_count
+    concede_count += 1
     manual_controller.output("[SYS] 持续低胜率，开始自动认输……")
     try:
         with click.hearthstone_action_session():
