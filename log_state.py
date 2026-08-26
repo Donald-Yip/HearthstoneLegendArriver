@@ -36,6 +36,9 @@ class LogState:
         self.general_choice_ready = False
         # 手牌入口计数（上游逻辑：用于手牌动画延迟判断）。
         self.hand_entry_count = 0
+        # 开局生效的全局卡数量（BLOCK_START TRIGGER + START_OF_GAME_KEYWORD
+        # + cardId 非空）。第一回合额外延时按此计数（每张 +2s，可配置）。
+        self.start_of_game_card_count = 0
         # 本局是否已警告过 my_player_id 交换（flush 每局重置，避免刷屏）。
         self._swap_warned = False
 
@@ -328,6 +331,16 @@ def update_state(state, line_info_container):
     if line_info_container.line_type == LOG_LINE_CREATE_GAME:
         # sys_print("Read in new game and flush state")
         state.flush()
+
+    if line_info_container.line_type == LOG_LINE_BLOCK_START_TRIGGER:
+        # 一张开局生效的全局卡事件。Entity 括号里 cardId 可能当时为空，
+        # 但实体 id 已在 SHOW_ENTITY 时注册过 card_id。据此解析真实卡牌，
+        # 只有 card_id 非空才计为一张生效卡（排除无卡牌的通用机制触发）。
+        entity = state.entity_dict.get(
+            line_info_container.info_dict["entity_id"])
+        card_id = getattr(entity, "card_id", "") if entity is not None else ""
+        if card_id:
+            state.start_of_game_card_count += 1
 
     if line_info_container.line_type == LOG_LINE_GENERAL_CHOICE_START:
         state.clear_general_choice()

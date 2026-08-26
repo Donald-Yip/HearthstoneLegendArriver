@@ -760,10 +760,21 @@ def run_automatic_battle_step():
         # 每个新回合开始只延时一次（给盒子更新推荐留时间），
         # 同回合内的多次出牌操作之间不重复延时。
         player_turn_delay_key = turn
-        manual_controller.output(
-            f"[SYS] 回合 {turn} 开始：延时 "
-            f"{recommendation_config.pre_action_delay_seconds:.0f}s 后开始 OCR……")
-        time.sleep(recommendation_config.pre_action_delay_seconds)
+        delay = recommendation_config.pre_action_delay_seconds
+        label = f"回合 {turn} 延时"
+        # 第一回合额外延时：开局生效的全局卡（如黑暗主教本尼迪塔斯）要跑
+        # 效果动画，盒子推荐更新更晚。这里在 pre_action 基础上追加：
+        #   基础延时 + 每张生效卡 × per_card_delay。
+        if turn == 1:
+            card_count = getattr(snapshot, "start_of_game_card_count", 0) or 0
+            extra = (
+                recommendation_config.first_turn_extra_delay_seconds
+                + card_count
+                * recommendation_config.first_turn_per_card_delay_seconds)
+            if extra > 0:
+                delay += extra
+                label = f"第一回合延时（{card_count} 张开局生效卡）"
+        _sleep_with_delay(delay, label)
         manual_controller.output(
             f"[SYS] 回合 {turn} 延时结束，开始本轮推荐读取。")
     if recommendation_flow is None:
