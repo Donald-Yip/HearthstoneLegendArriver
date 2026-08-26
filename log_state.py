@@ -427,9 +427,9 @@ def update_state(state, line_info_container):
         tag = line_info_container.info_dict["tag"]
         value = line_info_container.info_dict["value"]
 
-        state.entity_dict[entity_id].set_tag(tag, value)
-        _record_friendly_hand_entry(
-            state, state.entity_dict[entity_id], tag, value)
+        entity = state.entity_dict[entity_id]
+        _record_friendly_hand_entry(state, entity, tag, value)
+        entity.set_tag(tag, value)
 
     if line_info_container.line_type == LOG_LINE_TAG:
         tag = line_info_container.info_dict["tag"]
@@ -448,9 +448,9 @@ def update_state(state, line_info_container):
                 state.oppo_player_id = str(3 - int(state.my_player_id))
                 # debug_print(f"my_player_id: {state.my_player_id}")
 
-        state.current_update_entity.set_tag(tag, value)
-        _record_friendly_hand_entry(
-            state, state.current_update_entity, tag, value)
+        entity = state.current_update_entity
+        _record_friendly_hand_entry(state, entity, tag, value)
+        entity.set_tag(tag, value)
 
     if line_info_container.line_type == LOG_LINE_PLAYER_ID:
         player_id = line_info_container.info_dict["player"]
