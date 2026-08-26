@@ -275,7 +275,7 @@ input:disabled{opacity:.45;cursor:not-allowed}
       <div class="btn-row">
         <button id="btnSaveDelays" class="btn btn-ghost" type="button">💾 保存延时</button>
       </div>
-      <div class="hint-line">默认采用上游时序（换牌前 20s / 识别后 0s / 换牌重试 5s / 每张开局卡 2s / 回合前 7s / 操作后 0s / OCR 1.4）。写入 ui_config.json 的 delays 段即时生效（下次开局/下回合读取）；自动化运行中不可修改。</div>
+      <div class="hint-line" id="delayHint">当前时序由服务端配置返回，见下方保存后刷新。</div>
     </section>
 
     <section class="card wide">
@@ -431,6 +431,20 @@ function render(s){
     $("inpPreDelay").value = s.delays.pre_action_delay_seconds;
     $("inpPostDelay").value = s.delays.post_action_delay_seconds;
     $("inpOcrScale").value = s.delays.ocr_preprocess_scale;
+  }
+
+  /* 延时设置说明：动态取自服务端当前配置，不硬编码 */
+  if (s.delays){
+    var d = s.delays;
+    $("delayHint").textContent =
+      "当前时序：换牌前 " + d.mulligan_ready_delay_seconds + "s / " +
+      "识别后 " + d.mulligan_post_ocr_delay_seconds + "s / " +
+      "换牌重试 " + d.mulligan_retry_delay_seconds + "s / " +
+      "每张开局卡 " + d.first_turn_per_card_delay_seconds + "s / " +
+      "回合前 " + d.pre_action_delay_seconds + "s / " +
+      "操作后 " + d.post_action_delay_seconds + "s / " +
+      "OCR " + d.ocr_preprocess_scale + "。" +
+      "写入 ui_config.json 的 delays 段即时生效（下次开局/下回合读取）；自动化运行中不可修改。";
   }
 
   /* 倒计时芯片 */
