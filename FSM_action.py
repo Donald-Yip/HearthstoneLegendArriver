@@ -418,9 +418,9 @@ def ChoosingCardAction():
     while mulligan_delay_generation != log_state.game_generation:
         waiting_generation = log_state.game_generation
         delay = recommendation_config.mulligan_ready_delay_seconds
-        manual_controller.output(
-            f"[SYS] 换牌阶段：延时 {delay:.0f}s 后开始识别留牌……")
-        time.sleep(delay)
+        # 用统一的 _sleep_with_delay：推送"延时 Ns 后"启动浮窗进度条，
+        # sleep 后再推"延时结束"清除，与换牌重试的进度表行为一致。
+        _sleep_with_delay(delay, "换牌前识别")
         mulligan_delay_generation = waiting_generation
         snapshot = refresh_snapshot()
         if snapshot is None:
