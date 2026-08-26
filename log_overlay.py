@@ -45,6 +45,9 @@ def _turn_start(line: str) -> bool:
 
 
 _DELAY = None
+# 浮窗正文日志保留的最大行数：超过则丢弃最旧行，防止长时间运行内存/Text 无限膨胀
+# 把浮窗线程压垮（Web 页面日志也有限制，浮窗此前没有）。
+_MAX_LINES = 800
 _delay_start_re = re.compile(r"(?:延时|等待)\s*(\d+(?:\.\d+)?)\s*s?\s*后")
 _delay_end_markers = ("延时结束", "延时完毕")
 
@@ -97,6 +100,10 @@ def push(line: str, _level: str = "INFO") -> None:
         if _update_delay_from_line(line):
             return  # 延时行只驱动进度条，不进正文日志
         _LINES.append((line, _turn_start(line)))
+        if len(_LINES) > _MAX_LINES:
+            # 丢弃最旧行，保留最近 _MAX_LINES 行；_update 在渲染时检测
+            # len(lines) < rendered[0] 会全量重建 Text，避免 Text 无限增长。
+            del _LINES[:len(_LINES) - _MAX_LINES]
     if is_turn_start:
         # 我方回合开始：把炉石唤回前台，避免 OCR 被其他窗口挡住。
         _raise_hearthstone()
