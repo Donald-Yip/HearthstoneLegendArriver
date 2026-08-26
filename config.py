@@ -268,12 +268,11 @@ class RecommendationConfig:
     # ------------------------------------------------------------------ 换牌
     # 每局进入换牌阶段后等待 N 秒，再开始识图和换牌操作（上游时序）。
     # 作用：留出时间让盒子留牌面板就位、避免开局日志/截图尚未稳定。
-    # 之前本地用户调优为 11s；上游实测 20s 更稳。可通过 delays 段覆盖。
-    mulligan_ready_delay_seconds: float = 20.0
-    # 换牌建议已稳定识别后立即点击，不再追加等待（上游时序）。
-    # 0 = 识别成功后马上点；>0 会在“识别 OK → 点击确认”之间插入缓冲，
-    # 防止识别结果是面板动画中间帧导致点错。之前本地为 5s；上游改为 0。
-    mulligan_post_ocr_delay_seconds: float = 0.0
+    # 用户当前设为 18s（本地调优）。可通过 delays 段覆盖。
+    mulligan_ready_delay_seconds: float = 18.0
+    # 换牌建议已稳定识别后到实际点击之间的缓冲（秒）。
+    # 用户当前设为 1s（防止面板动画中间帧导致点错）。可通过 delays 段覆盖。
+    mulligan_post_ocr_delay_seconds: float = 1.0
     # 换牌阶段“重试”之间的等待间隔（秒）。区别于上面的 post_ocr：
     # post_ocr 是“识别成功 → 点击”的单次缓冲；本字段是“面板未就绪 /
     # 推荐暂不可执行 / 确认仍未消失”时，每轮重试前等多久。
@@ -293,8 +292,8 @@ class RecommendationConfig:
     # 这里在第一回合的 pre_action_delay 基础上追加延时：
     #   * 每张生效卡额外延时：Power.log 里每检测到一张 cardId 非空且
     #     TriggerKeyword=START_OF_GAME_KEYWORD 的开局触发卡，追加这么多秒。
-    # 默认 2s/张（用户实测 SW_448 单卡开局效果明显）。
-    first_turn_per_card_delay_seconds: float = 2.0
+    # 用户当前设为 3.5s/张（SW_448 实测）。
+    first_turn_per_card_delay_seconds: float = 3.5
 
     # ------------------------------------------------------------------ 出牌
     # 每个新回合开始延时一次（给盒子更新推荐留时间），
@@ -302,7 +301,7 @@ class RecommendationConfig:
     pre_action_delay_seconds: float = 7.0
     # 一次操作执行完成之后到下轮截图+OCR 的延时（0 = 立即开始）；
     # 配合上面"回合只延时一次"使用。>0 会拉开操作间距，让盒子有时间更新。
-    post_action_delay_seconds: float = 0.0
+    post_action_delay_seconds: float = 0.5
     # 单次读取（截图+OCR+解析）的超时保护（秒）。
     recognition_timeout_seconds: float = 2.0
     # 单次执行（点击操作）结果的等待/校验超时（秒）。
