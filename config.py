@@ -202,6 +202,7 @@ def _user_confirm_roi() -> Optional[tuple[int, int, int, int]]:
 _USER_DELAY_KEYS = (
     "mulligan_ready_delay_seconds",
     "mulligan_post_ocr_delay_seconds",
+    "mulligan_retry_delay_seconds",
     "pre_action_delay_seconds",
     "post_action_delay_seconds",
     "ocr_preprocess_scale",
@@ -272,6 +273,12 @@ class RecommendationConfig:
     # 0 = 识别成功后马上点；>0 会在“识别 OK → 点击确认”之间插入缓冲，
     # 防止识别结果是面板动画中间帧导致点错。之前本地为 5s；上游改为 0。
     mulligan_post_ocr_delay_seconds: float = 0.0
+    # 换牌阶段“重试”之间的等待间隔（秒）。区别于上面的 post_ocr：
+    # post_ocr 是“识别成功 → 点击”的单次缓冲；本字段是“面板未就绪 /
+    # 推荐暂不可执行 / 确认仍未消失”时，每轮重试前等多久。
+    # 上游把 post_ocr 设为 0 后，若重试也复用它会变成 0 秒忙等（CPU 空转、
+    # 疯狂截图）。因此单独设一个默认 5s 的重试间隔，保证失败后的重试有退避。
+    mulligan_retry_delay_seconds: float = 5.0
     # 换牌"确认"按钮区域（屏幕坐标 left, top, right, bottom）。
     # 对齐 commit_choose_card 的点击点 (960,850)，以该点为中心外扩。
     # 点击确认后该按钮消失；仍能识别到"确认"说明换牌未提交成功，需重试。

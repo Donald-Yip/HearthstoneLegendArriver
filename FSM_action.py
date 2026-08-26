@@ -433,14 +433,17 @@ def ChoosingCardAction():
     if auto_mulligan_flow is not None:
         auto_mulligan_flow.reset_delay()  # 每局首次用 ready(7)，重试用 post_ocr(5)
         # 换牌自动流（理想流程）：
-        #   9s 等待后进入循环 → 每隔 mulligan_post_ocr(5s) 一次：
+        #   每局 ready(20s) 等待后进入循环 → 每隔 mulligan_retry(5s) 一次：
         #     ① 先检测屏幕中间“确认”按钮是否在场（面板就绪的物理信号）
         #     ② 在    → OCR 左侧留牌建议并执行换牌（替换+确认）
-        #        不在 → 等 5s 再试
+        #        不在 → 等 mulligan_retry_delay 再试
         #   点击后转为“确认按钮是否消失”校验：消失=已提交，仍在=未提交重试。
         confirmed_waiting = False
         verified = False
-        retry_delay = recommendation_config.mulligan_post_ocr_delay_seconds
+        # 重试间隔（面板未就绪/推荐暂不可执行/确认未消失时每轮等待）。
+        # 不复用 post_ocr（那是“识别→点击”缓冲）：上游 post_ocr=0 时，
+        # 若重试也取 0 会变成 0 秒忙等（CPU 空转 + 疯狂截图）。独立默认 5s。
+        retry_delay = recommendation_config.mulligan_retry_delay_seconds
         while True:
             # 循环内必须检查停止标志：主循环只在状态分发处检查，
             # 本循环若能无限运行，立即停止后鼠标会继续点击。
