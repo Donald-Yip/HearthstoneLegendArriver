@@ -422,7 +422,7 @@ def _run() -> None:
 
         rendered = [0]
 
-        def _update():
+        def _refresh():
             global _DELAY
             if _STOP.is_set():
                 root.destroy()
@@ -507,6 +507,17 @@ def _run() -> None:
             if at_bottom and rendered[0]:
                 text.see("end")
             root.after(_REFRESH_MS, _update)
+
+        def _update():
+            try:
+                _refresh()
+            except Exception as exc:
+                # 单次刷新异常不杀死浮窗：打印并继续下一轮调度。
+                print(f"[overlay] 刷新异常(继续): {type(exc).__name__}: {exc}")
+                try:
+                    root.after(_REFRESH_MS, _update)
+                except Exception:
+                    pass
 
         _update()
         root.mainloop()
