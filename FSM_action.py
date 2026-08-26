@@ -763,14 +763,12 @@ def run_automatic_battle_step():
         delay = recommendation_config.pre_action_delay_seconds
         label = f"回合 {turn} 延时"
         # 第一回合额外延时：开局生效的全局卡（如黑暗主教本尼迪塔斯）要跑
-        # 效果动画，盒子推荐更新更晚。这里在 pre_action 基础上追加：
-        #   基础延时 + 每张生效卡 × per_card_delay。
+        # 效果动画，盒子推荐更新更晚。这里在 pre_action 基础上按张数追加：
+        #   每张生效卡 × per_card_delay（无固定基础额外）。
         if turn == 1:
             card_count = getattr(snapshot, "start_of_game_card_count", 0) or 0
-            extra = (
-                recommendation_config.first_turn_extra_delay_seconds
-                + card_count
-                * recommendation_config.first_turn_per_card_delay_seconds)
+            extra = (card_count
+                     * recommendation_config.first_turn_per_card_delay_seconds)
             if extra > 0:
                 delay += extra
                 label = f"第一回合延时（{card_count} 张开局生效卡）"

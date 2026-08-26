@@ -499,7 +499,6 @@ _DELAY_BOUNDS = {
     "mulligan_ready_delay_seconds": (0.0, 120.0),
     "mulligan_post_ocr_delay_seconds": (0.0, 30.0),
     "mulligan_retry_delay_seconds": (0.0, 60.0),
-    "first_turn_extra_delay_seconds": (0.0, 60.0),
     "first_turn_per_card_delay_seconds": (0.0, 20.0),
     "pre_action_delay_seconds": (0.0, 60.0),
     "post_action_delay_seconds": (0.0, 10.0),

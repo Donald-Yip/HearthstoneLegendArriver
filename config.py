@@ -203,7 +203,6 @@ _USER_DELAY_KEYS = (
     "mulligan_ready_delay_seconds",
     "mulligan_post_ocr_delay_seconds",
     "mulligan_retry_delay_seconds",
-    "first_turn_extra_delay_seconds",
     "first_turn_per_card_delay_seconds",
     "pre_action_delay_seconds",
     "post_action_delay_seconds",
@@ -291,12 +290,10 @@ class RecommendationConfig:
     # 第一回合开始时会有一批"开局生效的全局卡"（如黑暗主教本尼迪塔斯 SW_448
     # 触发 TriggerKeyword=START_OF_GAME_KEYWORD），它们要跑入场/效果动画，导致
     # 第一回合实际比普通回合更久，盒子推荐也可能更新更晚。
-    # 这里在第一回合的 pre_action_delay 基础上追加两段延时：
-    #   * 基础额外延时：无论有没有开局生效卡，第一回合都额外等这么多秒。
+    # 这里在第一回合的 pre_action_delay 基础上追加延时：
     #   * 每张生效卡额外延时：Power.log 里每检测到一张 cardId 非空且
     #     TriggerKeyword=START_OF_GAME_KEYWORD 的开局触发卡，追加这么多秒。
     # 默认 2s/张（用户实测 SW_448 单卡开局效果明显）。
-    first_turn_extra_delay_seconds: float = 2.0
     first_turn_per_card_delay_seconds: float = 2.0
 
     # ------------------------------------------------------------------ 出牌
