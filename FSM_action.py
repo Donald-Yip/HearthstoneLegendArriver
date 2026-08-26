@@ -562,7 +562,10 @@ def _report_automation_diagnostic(code, message):
     global last_automation_diagnostic
     if last_automation_diagnostic == code:
         return
-    manual_controller.output(message)
+    try:
+        manual_controller.output(message)
+    except Exception:
+        pass
     last_automation_diagnostic = code
 
 
@@ -576,7 +579,10 @@ def _report_mulligan_diagnostic(code, message):
     global _mulligan_diagnostic_key
     if _mulligan_diagnostic_key == code:
         return
-    manual_controller.output(message)
+    try:
+        manual_controller.output(message)
+    except Exception:
+        pass
     _mulligan_diagnostic_key = code
 
 

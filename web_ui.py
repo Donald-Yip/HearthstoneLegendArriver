@@ -102,9 +102,13 @@ def _log(level: str, msg: str):
             "level": level,
             "msg": str(msg),
         })
-    # 统一推入日志浮窗（关键行），与自动化日志同通道、按时间先后
+    # 统一推入日志浮窗（关键行），与自动化日志同通道、按时间先后。
+    # 浮窗若出现异常绝不能让日志系统把主流程一起拖垮。
     if log_overlay is not None and _overlay_key(str(msg)):
-        log_overlay.push(str(msg), level)
+        try:
+            log_overlay.push(str(msg), level)
+        except Exception:
+            pass
     # 同时落盘：程序关闭/异常退出后仍可离线查看（诊断不依赖人工复制）。
     try:
         path = ROOT / "ui_log_last.txt"
