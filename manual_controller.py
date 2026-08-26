@@ -1,9 +1,13 @@
 """Command-line control for mulligan and player-turn actions."""
 
 from dataclasses import dataclass, replace
+import sys
 import threading
 import time
 from typing import Callable, Optional, Union
+
+
+FRIENDLY_HAND_TARGET_CARD_IDS = frozenset({"CATA_490", "CATA_563"})
 
 
 class GlobalHotkeyInput:
@@ -73,6 +77,48 @@ class GlobalHotkeyInput:
                     self.keyboard.remove_hotkey(handle)
                 except Exception:
                     pass
+
+
+def cancellable_console_input(
+    prompt: str,
+    stop_event: threading.Event,
+    key_available=None,
+    read_key=None,
+    sleep_func=time.sleep,
+    write_func=None,
+) -> str:
+    """Read a Windows console line while allowing Ctrl+Q to cancel it."""
+    if key_available is None or read_key is None:
+        import msvcrt
+        key_available = msvcrt.kbhit
+        read_key = msvcrt.getwch
+    if write_func is None:
+        write_func = lambda text: (sys.stdout.write(text), sys.stdout.flush())
+
+    write_func(prompt)
+    chars = []
+    while not stop_event.is_set():
+        if not key_available():
+            sleep_func(0.05)
+            continue
+        char = read_key()
+        if char in ("\r", "\n"):
+            write_func("\n")
+            return "".join(chars)
+        if char == "\003":
+            raise KeyboardInterrupt
+        if char == "\b":
+            if chars:
+                chars.pop()
+                write_func("\b \b")
+            continue
+        if char in ("\x00", "\xe0"):
+            read_key()
+            continue
+        if char.isprintable():
+            chars.append(char)
+            write_func(char)
+    raise KeyboardInterrupt
 
 
 @dataclass(frozen=True)
@@ -228,12 +274,11 @@ class ClickExecutor:
             self.click.put_minion(gap_index, minion_count)
         # Let the board fan-out settle briefly before clicking the target.
         if target is not None:
-            # Friendly hand targets are exclusively allowed for CATA_490 by
-            # ManualController.  Its battlecry choice UI appears later than
-            # ordinary minion targets, so wait for that UI to settle.
-            is_cata_hand_target = (
+            # Supported battlecry hand targets appear later than ordinary
+            # minion targets, so wait for that UI to settle.
+            is_friendly_hand_target = (
                 target.side == "friendly" and target.kind == "hand")
-            self.sleep(0.8 if is_cata_hand_target else 0.3)
+            self.sleep(0.8 if is_friendly_hand_target else 0.3)
         if target is not None:
             adjusted = target
             if target.side == "friendly" and target.kind == "hand":
@@ -296,6 +341,7 @@ class ClickExecutor:
         self.click.choose_my_board_entity(
             location_screen_index, board_slot_count)
         if target is not None:
+            self.sleep(0.3)
             self._click_target(target, my_board_count, oppo_board_count)
         self.click.cancel_click()
 
@@ -723,15 +769,19 @@ class ManualController:
                     and getattr(selected, "entity_id", None)
                     != action.hand_entity_id):
                 return self._reject("手牌对象已经变化，未执行操作。")
-            if (action.target is not None
-                    and action.target.kind == "hand"
-                    and (selected.card_id != "CATA_490"
-                         or action.target.side != "friendly"
-                         or action.target.index is None)):
-                return self._reject("该随从不能选择手牌目标，未执行操作。")
-            if (not (action.target is not None
-                     and action.target.kind == "hand")
-                    and not self._target_exists(action.target, state)):
+            is_hand_target = (
+                action.target is not None and action.target.kind == "hand")
+            if is_hand_target:
+                if (selected.card_id not in FRIENDLY_HAND_TARGET_CARD_IDS
+                        or action.target.side != "friendly"
+                        or action.target.index is None):
+                    return self._reject(
+                        "该随从不能选择手牌目标，未执行操作。")
+                if (action.target.index == action.hand_index
+                        or not self._target_exists(action.target, state)):
+                    return self._reject(
+                        "手牌目标已经失效，未执行操作。")
+            elif not self._target_exists(action.target, state):
                 return self._reject("目标已经不存在，未执行操作。")
 
             if action.cardtype == "MINION":
