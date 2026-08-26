@@ -106,8 +106,10 @@ def push(line: str, _level: str = "INFO") -> None:
         # _LINES 只保留最近 _MAX_LINES 行供浮窗显示（不影响完整缓存）。
         _LINES.append((line, _turn_start(line)))
         if len(_LINES) > _MAX_LINES:
-            # 丢弃最旧行，仅影响浮窗显示；保存仍用 _FULL_LINES 完整写出。
-            del _LINES[:len(_LINES) - _MAX_LINES]
+            # _LINES 是 deque，不支持切片删除，改用 popleft 丢弃最旧行。
+            # 仅影响浮窗显示；保存仍用 _FULL_LINES 完整写出。
+            while len(_LINES) > _MAX_LINES:
+                _LINES.popleft()
     if is_turn_start:
         # 我方回合开始：把炉石唤回前台，避免 OCR 被其他窗口挡住。
         _raise_hearthstone()
