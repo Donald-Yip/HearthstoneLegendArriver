@@ -12,10 +12,12 @@ from power_log import find_latest_power_log
 # （定义于 config.py，可经 HS_LOG_TAIL_WAIT_INTERVAL 覆盖。）
 
 # "D 04:23:18.0000001 GameState.DebugPrintPower() -     GameEntity EntityID=1"
-# 也覆盖 PowerTaskList.DebugPrintPower()（不同对局/回放日志的前缀不同）。
+# 只解析 GameState 前缀。Power.log 里还有 PowerTaskList 前缀的"复述"行，
+# 那是任务执行的重复视图，若也作为状态源会把实体的 CONTROLLER/ZONE 等
+# 改错（实测把友方手牌 CONTROLLER 从 1 改成 2，导致 my_hand_cards 少算）。
 GAME_STATE_PATTERN = re.compile(
     r"D [\d]{2}:[\d]{2}:[\d]{2}.[\d]{7} "
-    r"(?:GameState|PowerTaskList)\.DebugPrint(Game|Power)\(\) - (.+)")
+    r"GameState\.DebugPrint(Game|Power)\(\) - (.+)")
 
 # "GameEntity EntityID=1"
 GAME_ENTITY_PATTERN = re.compile(r" *GameEntity EntityID=(\d+)")
