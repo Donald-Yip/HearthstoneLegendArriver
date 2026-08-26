@@ -140,10 +140,8 @@ def initialize_recommendation_automation():
         click, read_mulligan_action, _automation_state,
         action_context=click.hearthstone_action_session,
         stopped=shutdown_event.is_set,
-        # 上次修复把 first_delay 误设为 ready(7)，导致“开局先等7s 再OCR，
-        # OCR后 又等7s 再点击”两段 7s 叠加。这里 OCR 前的 7s 由
-        # ChoosingCardAction 的 ready 延时负责；MulliganFlow 内的延时是
-        # “OCR 成功 → 点击”之间的缓冲，统一用 post_ocr(5s)。
+        # 上游时序：OCR 前的每局等待由 ChoosingCardAction 的 ready 延时负责；
+        # OCR 成功后立即点击，不再叠加缓冲（mulligan_post_ocr_delay=0）。
         first_delay=recommendation_config.mulligan_post_ocr_delay_seconds,
         retry_delay=recommendation_config.mulligan_post_ocr_delay_seconds)
     recommendation_flow = RecommendationFlow(
@@ -419,8 +417,7 @@ def ChoosingCardAction():
     # generation so every match waits once, including matches after the first.
     while mulligan_delay_generation != log_state.game_generation:
         waiting_generation = log_state.game_generation
-        delay = (recommendation_config.mulligan_ready_delay_seconds
-                 if auto_mulligan_flow is not None else 2)
+        delay = recommendation_config.mulligan_ready_delay_seconds
         manual_controller.output(
             f"[SYS] 换牌阶段：延时 {delay:.0f}s 后开始识别留牌……")
         time.sleep(delay)

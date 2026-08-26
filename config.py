@@ -139,6 +139,37 @@ def _user_confirm_roi() -> Optional[tuple[int, int, int, int]]:
     return None
 
 
+# 可由 ui_config.json 的 delays 段可修改的延时字段（默认值取上游时序，
+# 但用户可在 ui_config.json 覆盖，避免写死）。
+_USER_DELAY_KEYS = (
+    "mulligan_ready_delay_seconds",
+    "mulligan_post_ocr_delay_seconds",
+    "pre_action_delay_seconds",
+    "post_action_delay_seconds",
+    "ocr_preprocess_scale",
+)
+
+
+def _user_delays() -> dict:
+    """读取用户可修改的延时（ui_config.json 的 delays 段）。返回仅含合法数值的键。"""
+    try:
+        cfg_path = ROOT / "ui_config.json"
+        data = json.loads(cfg_path.read_text(encoding="utf-8"))
+        delays = data.get("delays") or {}
+        result = {}
+        for key in _USER_DELAY_KEYS:
+            if key in delays:
+                try:
+                    value = float(delays[key])
+                except (TypeError, ValueError):
+                    continue
+                if value >= 0:
+                    result[key] = value
+        return result
+    except Exception:
+        return {}
+
+
 @dataclass(frozen=True)
 class RecommendationConfig:
     # ------------------------------------------------------------------ 屏幕
@@ -160,11 +191,10 @@ class RecommendationConfig:
     retry_interval_seconds: float = 0.1
 
     # ------------------------------------------------------------------ 换牌
-    # 游戏开始后第 N 秒才开始换牌识图（盒子留牌面板此刻已就位）。
-    mulligan_ready_delay_seconds: float = 11.0
-    # 换牌识别成功到实际点击之间的缓冲（防止读错后立即点击，
-    # 也留出面板稳定时间）；换牌重试也复用该延时。
-    mulligan_post_ocr_delay_seconds: float = 5.0
+    # 每局进入换牌阶段后等待 N 秒，再开始识图和换牌操作（上游时序）。
+    mulligan_ready_delay_seconds: float = 20.0
+    # 换牌建议已稳定识别后立即点击，不再追加等待（上游时序）。
+    mulligan_post_ocr_delay_seconds: float = 0.0
     # 换牌"确认"按钮区域（屏幕坐标 left, top, right, bottom）。
     # 对齐 commit_choose_card 的点击点 (960,850)，以该点为中心外扩。
     # 点击确认后该按钮消失；仍能识别到"确认"说明换牌未提交成功，需重试。
@@ -176,7 +206,7 @@ class RecommendationConfig:
     pre_action_delay_seconds: float = 7.0
     # 一次操作执行完成之后到下轮截图+OCR 的延时（0 = 立即开始）；
     # 配合上面"回合只延时一次"使用。
-    post_action_delay_seconds: float = 0.25
+    post_action_delay_seconds: float = 0.0
     # 单次读取/单次执行的超时保护。
     recognition_timeout_seconds: float = 2.0
     result_timeout_seconds: float = 5.0
@@ -185,7 +215,7 @@ class RecommendationConfig:
     # 预处理缩放倍数：1.5x 是实测识别精度/速度最佳点
     # （1.0x 快约 28% 但识别率下降不可接受；3.0x 无效且慢）。
     # 仍可用环境变量 OCR_PREPROCESS_SCALE 临时覆盖。
-    ocr_preprocess_scale: float = 1.2
+    ocr_preprocess_scale: float = 1.4
     # 自动线程数下限：OpenMP/MKL 线程默认取机器物理核数，
     # 低于此下限固定为此值（核数少的机器保守）。
     ocr_thread_min: int = 4
@@ -201,3 +231,6 @@ class RecommendationConfig:
         confirm_roi = _user_confirm_roi()
         if confirm_roi is not None:
             object.__setattr__(self, "mulligan_confirm_roi", confirm_roi)
+        # 用户可在 ui_config.json 的 delays 段覆盖延时（默认采用上游时序）。
+        for key, value in _user_delays().items():
+            object.__setattr__(self, key, value)

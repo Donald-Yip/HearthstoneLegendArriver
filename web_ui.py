@@ -41,7 +41,8 @@ WEB_DIR = ROOT / "web"
 CONFIG_PATH = ROOT / "ui_config.json"
 # 站点/端口/日志缓冲来自 config.py（可通过环境变量覆盖，见 HS_HOST/HS_PORT/HS_LOG_BUFFER_SIZE）。
 from config import (
-    DEFAULT_AUTO_CONCEDE, HOST, BASE_PORT, LOG_BUFFER_SIZE)
+    DEFAULT_AUTO_CONCEDE, HOST, BASE_PORT, LOG_BUFFER_SIZE,
+    _USER_DELAY_KEYS, RecommendationConfig)
 
 
 # ---------------------------------------------------------------- 管理员检测
@@ -492,6 +493,48 @@ def api_save_concede(body):
                         "threshold": threshold, "rounds": rounds}}
 
 
+# ------------------------------------------------------------------ 延时设置
+# 各延时字段的边界与默认值（默认值取自 RecommendationConfig，即上游时序）。
+_DELAY_BOUNDS = {
+    "mulligan_ready_delay_seconds": (0.0, 120.0),
+    "mulligan_post_ocr_delay_seconds": (0.0, 30.0),
+    "pre_action_delay_seconds": (0.0, 60.0),
+    "post_action_delay_seconds": (0.0, 10.0),
+    "ocr_preprocess_scale": (0.5, 4.0),
+}
+
+
+def _current_delays() -> dict:
+    """返回当前生效的延时配置（默认值叠加 ui_config.json 的 delays 段）。"""
+    return {key: getattr(RecommendationConfig(), key)
+            for key in _USER_DELAY_KEYS}
+
+
+def api_save_delays(body):
+    """保存延时配置（ui_config.json 的 delays 段）。"""
+    with CTRL.lock:
+        if CTRL.automation_thread is not None:
+            return {"ok": False, "error": "自动化运行中，请先停止后再修改延时配置。"}
+        cfg = load_config()
+        delays = dict(cfg.get("delays") or {})
+        for key in _USER_DELAY_KEYS:
+            if key not in body:
+                continue
+            try:
+                value = float(body[key])
+            except (TypeError, ValueError):
+                return {"ok": False, "error": f"{key} 必须为数字。"}
+            lo, hi = _DELAY_BOUNDS[key]
+            if not (lo <= value <= hi):
+                return {"ok": False,
+                        "error": f"{key} 必须介于 {lo}–{hi}。"}
+            delays[key] = value
+        cfg["delays"] = delays
+        save_config(cfg)
+    _log("SYS", "延时配置已保存。")
+    return {"ok": True, "message": "延时配置已保存", "delays": _current_delays()}
+
+
 def api_start(body: dict):
     with CTRL.lock:
         if CTRL.automation_thread is not None or CTRL.starting:
@@ -895,6 +938,7 @@ def status_snapshot():
         "schedule_start": start_iso,
         "schedule_end": end_iso,
         "concede": cfg.get("auto_concede") or dict(DEFAULT_AUTO_CONCEDE),
+        "delays": _current_delays(),
         "config": {"name": cfg.get("name", ""), "log_root": cfg.get("log_root", "")},
         "last_error": err,
         "last_summary": summary,
@@ -985,6 +1029,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_toggle_overlay(body))
             elif path == "/api/concede":
                 self._json(api_save_concede(body))
+            elif path == "/api/delays":
+                self._json(api_save_delays(body))
             else:
                 self._json({"ok": False, "error": "未知接口"}, 404)
         except Exception as exc:

@@ -20,7 +20,7 @@ class MulliganResult:
 class MulliganFlow:
     def __init__(self, executor, action_supplier, state_supplier,
                  action_context=None, stopped=lambda: False,
-                 sleep=time.sleep, pre_action_delay=5.0,
+                 sleep=time.sleep, pre_action_delay=0.0,
                  first_delay=None, retry_delay=None, confirm_ready=None):
         self.executor = executor
         self.action_supplier = action_supplier
@@ -79,8 +79,9 @@ class MulliganFlow:
                     MulliganStatus.CONCEDE,
                     diagnostics="confirm_button_absent")
             delay = self.retry_delay if self._delay_done else self.first_delay
-            print(f"已识别换牌建议，等待 {delay:.0f}s 后执行……")
-            self.sleep(delay)
+            if delay > 0:
+                print(f"已识别换牌建议，等待 {delay:.0f}s 后执行……")
+                self.sleep(delay)
             self._delay_done = True
             with self.action_context():
                 for index in selected:

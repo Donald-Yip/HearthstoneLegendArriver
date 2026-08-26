@@ -234,6 +234,41 @@ input:disabled{opacity:.45;cursor:not-allowed}
     </section>
 
     <section class="card wide">
+      <h2 class="card-title">⏱️ 延时设置</h2>
+      <div class="input-row">
+        <label class="field">
+          <span class="field-label">换牌前等待（秒）</span>
+          <input id="inpReadyDelay" type="number" min="0" max="120" step="0.5">
+          <span class="field-hint">每局进入换牌后先等 N 秒再识图</span>
+        </label>
+        <label class="field">
+          <span class="field-label">识别后缓冲（秒）</span>
+          <input id="inpPostOcrDelay" type="number" min="0" max="30" step="0.5">
+          <span class="field-hint">换牌识别成功后到点击的缓冲</span>
+        </label>
+        <label class="field">
+          <span class="field-label">每回合前延时（秒）</span>
+          <input id="inpPreDelay" type="number" min="0" max="60" step="0.5">
+          <span class="field-hint">新回合开始给盒子更新推荐留时间</span>
+        </label>
+        <label class="field">
+          <span class="field-label">操作后延时（秒）</span>
+          <input id="inpPostDelay" type="number" min="0" max="10" step="0.25">
+          <span class="field-hint">一次操作后到下轮 OCR 的间隔</span>
+        </label>
+        <label class="field">
+          <span class="field-label">OCR 缩放</span>
+          <input id="inpOcrScale" type="number" min="0.5" max="4" step="0.1">
+          <span class="field-hint">识别精度/速度平衡点</span>
+        </label>
+      </div>
+      <div class="btn-row">
+        <button id="btnSaveDelays" class="btn btn-ghost" type="button">💾 保存延时</button>
+      </div>
+      <div class="hint-line">默认采用上游时序（换牌前 20s / 识别后 0s / 回合前 7s / 操作后 0s / OCR 1.4）。写入 ui_config.json 的 delays 段即时生效（下次开局/下回合读取）；自动化运行中不可修改。</div>
+    </section>
+
+    <section class="card wide">
       <h2 class="card-title">🎯 校准推荐区域</h2>
       <div class="btn-row">
         <button id="btnCalibrate" class="btn btn-ghost" type="button">📐 显示校准框</button>
@@ -308,6 +343,7 @@ var lastStatus = null;
 var logSeq = 0;
 var dirty = {name:false, log:false};
 var dirtyConcede = false;
+var dirtyDelays = false;
 
 var PHASE_INFO = {
   idle:     {label:"空闲",            cls:"idle"},
@@ -374,6 +410,15 @@ function render(s){
     $("chkConcede").checked = !!s.concede.enabled;
     $("inpConcedeThreshold").value = s.concede.threshold;
     $("inpConcedeRounds").value = s.concede.rounds;
+  }
+
+  /* 延时设置 */
+  if (s.delays && !dirtyDelays){
+    $("inpReadyDelay").value = s.delays.mulligan_ready_delay_seconds;
+    $("inpPostOcrDelay").value = s.delays.mulligan_post_ocr_delay_seconds;
+    $("inpPreDelay").value = s.delays.pre_action_delay_seconds;
+    $("inpPostDelay").value = s.delays.post_action_delay_seconds;
+    $("inpOcrScale").value = s.delays.ocr_preprocess_scale;
   }
 
   /* 倒计时芯片 */
@@ -460,6 +505,8 @@ $("inpLog").addEventListener("input", function(){ dirty.log = true; });
 $("chkConcede").addEventListener("change", function(){ dirtyConcede = true; });
 $("inpConcedeThreshold").addEventListener("input", function(){ dirtyConcede = true; });
 $("inpConcedeRounds").addEventListener("input", function(){ dirtyConcede = true; });
+["inpReadyDelay","inpPostOcrDelay","inpPreDelay","inpPostDelay","inpOcrScale"]
+  .forEach(function(id){ $(id).addEventListener("input", function(){ dirtyDelays = true; }); });
 
 function saveConfig(){
   post("/api/config", {name:$("inpName").value.trim(), log_root:$("inpLog").value.trim()})
@@ -587,6 +634,24 @@ $("btnSaveConcede").addEventListener("click", function(){
     if (r.ok){
       toast(r.message, "ok");
       dirtyConcede = false;
+    } else {
+      toast(r.error || "保存失败", "error");
+    }
+  });
+});
+
+/* ---------- 延时设置 ---------- */
+$("btnSaveDelays").addEventListener("click", function(){
+  post("/api/delays", {
+    mulligan_ready_delay_seconds: $("inpReadyDelay").value,
+    mulligan_post_ocr_delay_seconds: $("inpPostOcrDelay").value,
+    pre_action_delay_seconds: $("inpPreDelay").value,
+    post_action_delay_seconds: $("inpPostDelay").value,
+    ocr_preprocess_scale: $("inpOcrScale").value
+  }).then(function(r){
+    if (r.ok){
+      toast(r.message, "ok");
+      dirtyDelays = false;
     } else {
       toast(r.error || "保存失败", "error");
     }
