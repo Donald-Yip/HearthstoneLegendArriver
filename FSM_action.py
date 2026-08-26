@@ -9,6 +9,7 @@ import keyboard
 
 import click
 import get_screen
+from config import DEFAULT_AUTO_CONCEDE, SNAPSHOT_WRITE_INTERVAL
 from manual_controller import (
     ClickExecutor, GlobalHotkeyInput, ManualController,
 )
@@ -66,8 +67,7 @@ _concede_streak = 0
 _concede_last_turn = None
 _concede_triggered = False
 # 调试快照写盘节流：日志每次变化都全量序列化整个 log_state 会拖慢主循环，
-# 只在间隔 SNAPSHOT_WRITE_INTERVAL 秒后重新写盘。
-SNAPSHOT_WRITE_INTERVAL = 5.0
+# 只在间隔 SNAPSHOT_WRITE_INTERVAL 秒后重新写盘。（定义于 config.py）
 _last_snapshot_write = 0.0
 
 
@@ -620,12 +620,15 @@ def _load_concede_config():
         p = Path(__file__).resolve().parent / "ui_config.json"
         ac = json.loads(p.read_text(encoding="utf-8")).get("auto_concede") or {}
         return {
-            "enabled": bool(ac.get("enabled", False)),
-            "threshold": float(ac.get("threshold", 10.0)),
-            "rounds": max(1, int(ac.get("rounds", 3))),
+            "enabled": bool(ac.get(
+                "enabled", DEFAULT_AUTO_CONCEDE["enabled"])),
+            "threshold": float(ac.get(
+                "threshold", DEFAULT_AUTO_CONCEDE["threshold"])),
+            "rounds": max(1, int(ac.get(
+                "rounds", DEFAULT_AUTO_CONCEDE["rounds"]))),
         }
     except Exception:
-        return {"enabled": False, "threshold": 10.0, "rounds": 3}
+        return dict(DEFAULT_AUTO_CONCEDE)
 
 
 def read_ai_win_rate():

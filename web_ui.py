@@ -40,7 +40,8 @@ ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
 CONFIG_PATH = ROOT / "ui_config.json"
 # 站点/端口/日志缓冲来自 config.py（可通过环境变量覆盖，见 HS_HOST/HS_PORT/HS_LOG_BUFFER_SIZE）。
-from config import HOST, BASE_PORT, LOG_BUFFER_SIZE
+from config import (
+    DEFAULT_AUTO_CONCEDE, HOST, BASE_PORT, LOG_BUFFER_SIZE)
 
 
 # ---------------------------------------------------------------- 管理员检测
@@ -60,11 +61,7 @@ DEFAULT_CONFIG = {
     "log_root": "",
     "schedule_start": None,
     "schedule_end": None,
-    "auto_concede": {
-        "enabled": False,
-        "threshold": 10.0,
-        "rounds": 3,
-    },
+    "auto_concede": dict(DEFAULT_AUTO_CONCEDE),
 }
 
 
@@ -469,15 +466,18 @@ def api_save_concede(body):
         if CTRL.automation_thread is not None:
             return {"ok": False, "error": "自动化运行中，请先停止后再修改自动投降配置。"}
         cfg = load_config()
-        ac = dict(cfg.get("auto_concede") or {})
-        ac["enabled"] = bool(body.get("enabled", ac.get("enabled", False)))
+        ac = dict(cfg.get("auto_concede") or DEFAULT_AUTO_CONCEDE)
+        ac["enabled"] = bool(body.get("enabled", ac.get(
+            "enabled", DEFAULT_AUTO_CONCEDE["enabled"])))
         try:
-            threshold = float(body.get("threshold", ac.get("threshold", 10.0)))
+            threshold = float(body.get("threshold", ac.get(
+                "threshold", DEFAULT_AUTO_CONCEDE["threshold"])))
         except (TypeError, ValueError):
             return {"ok": False, "error": "阈值必须为数字（0-100）。"}
         threshold = max(0.0, min(100.0, threshold))
         try:
-            rounds = int(body.get("rounds", ac.get("rounds", 3)))
+            rounds = int(body.get("rounds", ac.get(
+                "rounds", DEFAULT_AUTO_CONCEDE["rounds"])))
         except (TypeError, ValueError):
             return {"ok": False, "error": "连续回合数必须为整数（1-50）。"}
         rounds = max(1, min(50, rounds))
@@ -894,7 +894,7 @@ def status_snapshot():
         "game_elapsed_sec": elapsed,
         "schedule_start": start_iso,
         "schedule_end": end_iso,
-        "concede": cfg.get("auto_concede") or {"enabled": False, "threshold": 10.0, "rounds": 3},
+        "concede": cfg.get("auto_concede") or dict(DEFAULT_AUTO_CONCEDE),
         "config": {"name": cfg.get("name", ""), "log_root": cfg.get("log_root", "")},
         "last_error": err,
         "last_summary": summary,

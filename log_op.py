@@ -2,13 +2,14 @@ import re
 import time
 import copy
 from pathlib import Path
+from config import LOG_TAIL_WAIT_INTERVAL
 from constants.constants import *
 from power_log import find_latest_power_log
 
 # 读到 Power.log 尾部（EOF）后等待新行的时间。原来每次 0.2 秒、连续两次
 # EOF 才返回，导致 update_log_state 静止时每轮阻塞 0.4 秒；缩短后主循环
 # 对日志的响应延迟大幅下降，空轮询的 CPU 开销仍然很低。
-LOG_TAIL_WAIT_INTERVAL = 0.05
+# （定义于 config.py，可经 HS_LOG_TAIL_WAIT_INTERVAL 覆盖。）
 
 # "D 04:23:18.0000001 GameState.DebugPrintPower() -     GameEntity EntityID=1"
 GAME_STATE_PATTERN = re.compile(r"D [\d]{2}:[\d]{2}:[\d]{2}.[\d]{7} GameState.DebugPrint(Game|Power)\(\) - (.+)")
