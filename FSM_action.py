@@ -473,12 +473,12 @@ def ChoosingCardAction():
                         continue
                 time.sleep(0.3)
                 continue
-            # 每轮开头先检测“确认”按钮：在 → 执行换牌；不在 → 等 5s 再试。
+            # 每轮开头先检测“确认”按钮：在 → 执行换牌；不在 → 等 retry 再试。
             if not confirm_button_present():
                 _report_mulligan_diagnostic(
                     "confirm_absent",
                     "确认按钮未检测到（面板尚未就绪或已提交），等待重试……")
-                time.sleep(retry_delay)
+                _sleep_with_delay(retry_delay, "换牌重试")
                 continue
             result = auto_mulligan_flow.run()
             if result.status == MulliganStatus.CONFIRMED:
@@ -500,7 +500,7 @@ def ChoosingCardAction():
                 message = ("换牌阶段未检测到可执行的留牌面板（可能已提交或"
                            "面板未就绪），等待对局开始……")
             _report_mulligan_diagnostic(result.diagnostics, message)
-            time.sleep(retry_delay)
+            _sleep_with_delay(retry_delay, "换牌重试")
 
     selected = manual_controller.choose_mulligan(snapshot)
     fresh_snapshot = refresh_snapshot()
@@ -584,6 +584,26 @@ def _report_mulligan_diagnostic(code, message):
     except Exception:
         pass
     _mulligan_diagnostic_key = code
+
+
+def _sleep_with_delay(seconds: float, desc: str) -> None:
+    """等待并驱动浮窗底部延时进度条（进度条识别"延时 Ns 后"字样）。
+
+    换牌重试/等待类延时若直接用 time.sleep，浮窗倒计时表不会启动（它只
+    解析含"延时/等待 Ns 后"的日志行）。这里在 sleep 前推送一条带数字的
+    延时行让进度条显示当前等待，sleep 后再推"延时结束"清除进度条。
+    """
+    seconds = max(0.0, float(seconds))
+    try:
+        manual_controller.output(f"[SYS] {desc}：延时 {seconds:.0f}s 后……")
+    except Exception:
+        pass
+    if seconds > 0:
+        time.sleep(seconds)
+    try:
+        manual_controller.output("[SYS] 延时结束")
+    except Exception:
+        pass
 
 
 def confirm_button_present() -> bool:

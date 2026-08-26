@@ -70,7 +70,9 @@ def _update_delay_from_line(line: str) -> bool:
     start = _delay_start_re.search(line)
     if start:
         total = float(start.group(1))
-        if "换牌" in line:
+        if "换牌重试" in line:
+            label = "换牌重试"
+        elif "换牌" in line:
             label = "换牌延时"
         elif "回合" in line:
             label = "回合延时"
