@@ -61,7 +61,7 @@ class RecommendationConfig:
 
     # ------------------------------------------------------------------ 换牌
     # 游戏开始后第 N 秒才开始换牌识图（盒子留牌面板此刻已就位）。
-    mulligan_ready_delay_seconds: float = 9.0
+    mulligan_ready_delay_seconds: float = 11.0
     # 换牌识别成功到实际点击之间的缓冲（防止读错后立即点击，
     # 也留出面板稳定时间）；换牌重试也复用该延时。
     mulligan_post_ocr_delay_seconds: float = 5.0
@@ -76,7 +76,7 @@ class RecommendationConfig:
     pre_action_delay_seconds: float = 7.0
     # 一次操作执行完成之后到下轮截图+OCR 的延时（0 = 立即开始）；
     # 配合上面"回合只延时一次"使用。
-    post_action_delay_seconds: float = 0.5
+    post_action_delay_seconds: float = 0.25
     # 单次读取/单次执行的超时保护。
     recognition_timeout_seconds: float = 2.0
     result_timeout_seconds: float = 5.0
