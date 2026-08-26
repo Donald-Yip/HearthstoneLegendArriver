@@ -45,9 +45,10 @@ def _turn_start(line: str) -> bool:
 
 
 _DELAY = None
-# 浮窗正文日志保留的最大行数：超过则丢弃最旧行，防止长时间运行内存/Text 无限膨胀
-# 把浮窗线程压垮（Web 页面日志也有限制，浮窗此前没有）。
-_MAX_LINES = 800
+# 浮窗只显示最近 _MAX_LINES 行（超出丢弃最旧行，仅影响显示）。
+_MAX_LINES = 500
+# 完整正文日志缓存：不做行数丢弃，供“保存日志”写出全部历史。
+_FULL_LINES = []
 _delay_start_re = re.compile(r"(?:延时|等待)\s*(\d+(?:\.\d+)?)\s*s?\s*后")
 _delay_end_markers = ("延时结束", "延时完毕")
 
@@ -97,12 +98,15 @@ def push(line: str, _level: str = "INFO") -> None:
         return
     is_turn_start = "轮到己方" in line
     with _LOCK:
-        if _update_delay_from_line(line):
-            return  # 延时行只驱动进度条，不进正文日志
+        delay_only = _update_delay_from_line(line)
+        # 完整日志缓存：所有日志行（含延时行）都保留，供保存完整写出。
+        _FULL_LINES.append(line)
+        if delay_only:
+            return  # 延时行只驱动进度条，不写浮窗正文
+        # _LINES 只保留最近 _MAX_LINES 行供浮窗显示（不影响完整缓存）。
         _LINES.append((line, _turn_start(line)))
         if len(_LINES) > _MAX_LINES:
-            # 丢弃最旧行，保留最近 _MAX_LINES 行；_update 在渲染时检测
-            # len(lines) < rendered[0] 会全量重建 Text，避免 Text 无限增长。
+            # 丢弃最旧行，仅影响浮窗显示；保存仍用 _FULL_LINES 完整写出。
             del _LINES[:len(_LINES) - _MAX_LINES]
     if is_turn_start:
         # 我方回合开始：把炉石唤回前台，避免 OCR 被其他窗口挡住。
@@ -117,7 +121,7 @@ def _save_log() -> str:
     os.makedirs(log_dir, exist_ok=True)
     path = os.path.join(log_dir, f"对战日志_{ts}.txt")
     with _LOCK:
-        lines = [ln for ln, _ in list(_LINES)]
+        lines = list(_FULL_LINES)
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"# 对战日志 {datetime.datetime.now():%Y-%m-%d %H:%M:%S}\n")
         f.write("\n".join(lines))
